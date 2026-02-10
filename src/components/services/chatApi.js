@@ -1,3 +1,5 @@
+
+
 import axios from "axios";
 
 const API_BASE_URL =
@@ -95,7 +97,7 @@ export const chatApi = {
   // Mark all notifications as read
   markAllNotificationsAsRead: (userId) => {
     return api.put(`/api/notifications/read/messages/${userId}`);
-  },
+  }, 
 
   // DELETE MESSAGE API
   deleteMessage: async (messageId) => {
@@ -116,6 +118,14 @@ export const chatApi = {
     );
     return response;
   },
+
+  //   getUserNotifications: (userId) => {
+  //   return api.get(`/api/notifications/${userId}`);
+  // },
+  
+  // markNotificationAsRead: (notificationId) => {
+  //   return api.put(`/api/notifications/read/${notificationId}`);
+  // },
 };
 
 
@@ -143,17 +153,6 @@ export const getSuggestedMatches = async () => {
 };
 
 export default api;
-
-
-
-
-
-
-
-
-
-
-
 
 
 

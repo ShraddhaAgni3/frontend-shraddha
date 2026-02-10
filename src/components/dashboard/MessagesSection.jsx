@@ -24,8 +24,12 @@ export default function MessagesSection() {
   const [recentChatsLoading, setRecentChatsLoading] = useState(true);
   const [showDeleteOption, setShowDeleteOption] = useState(null);
   const [deletingMessageId, setDeletingMessageId] = useState(null);
-
   const [messageLimitReached, setMessageLimitReached] = useState(false);
+  
+  // ✅ PROFILE PICTURES STATES ADD KIYE
+  const [userProfilePictures, setUserProfilePictures] = useState({});
+  const [profilePicturesLoaded, setProfilePicturesLoaded] = useState(false);
+  
   // for open img
   const [selectedImage, setSelectedImage] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -48,12 +52,71 @@ export default function MessagesSection() {
     console.log("Access Token:", localStorage.getItem("accessToken"));
     console.log("Token length:", localStorage.getItem("accessToken")?.length);
 
-    // Token format check
     const token = localStorage.getItem("accessToken");
     if (token) {
       console.log("Token starts with:", token.substring(0, 20) + "...");
     }
   }, []);
+
+  // ✅ PROFILE PICTURES FETCH - EK HI BAAR
+  useEffect(() => {
+    const fetchAllProfilePictures = async () => {
+      if (!currentUserId || profilePicturesLoaded) return;
+      
+      try {
+        console.log("🔄 Fetching all profile pictures...");
+        const response = await chatApi.searchUsers('');
+        
+        if (response.data && Array.isArray(response.data)) {
+          const pictures = {};
+          
+          response.data.forEach(user => {
+            if (user.id && user.id !== currentUserId) {
+              // Check all possible image fields
+              pictures[user.id] = 
+                user.image_url || 
+                user.profile_image || 
+                user.profile_picture || 
+                user.avatar_url ||
+                user.avatar ||
+                user.photo_url;
+            }
+          });
+          
+          console.log(`✅ ${Object.keys(pictures).length} profile pictures loaded`);
+          setUserProfilePictures(pictures);
+          setProfilePicturesLoaded(true);
+          
+          // Cache in localStorage for 1 day
+          localStorage.setItem('chat_profile_pictures', JSON.stringify({
+            data: pictures,
+            timestamp: Date.now()
+          }));
+        }
+      } catch (error) {
+        console.error("❌ Error fetching profile pictures:", error);
+      }
+    };
+
+    // Check cache first
+    const cached = localStorage.getItem('chat_profile_pictures');
+    if (cached) {
+      try {
+        const { data, timestamp } = JSON.parse(cached);
+        // Cache valid for 1 day
+        if (Date.now() - timestamp < 24 * 60 * 60 * 1000) {
+          setUserProfilePictures(data);
+          setProfilePicturesLoaded(true);
+          console.log("✅ Using cached profile pictures");
+          return;
+        }
+      } catch (e) {
+        console.log("Cache invalid, fetching fresh...");
+      }
+    }
+    
+    fetchAllProfilePictures();
+  }, [currentUserId, profilePicturesLoaded]);
 
   //  CORRECT
   useEffect(() => {
@@ -118,19 +181,14 @@ export default function MessagesSection() {
   };
 
   // Add this function
-const formatNameWithSpace = (name) => {
-  if (!name) return "User";
-  
-  // Add space before capital letters (except first)
-  const formatted = name.replace(/([a-z])([A-Z])/g, '$1 $2');
-  
-  return formatted || name;
-};
-
-// Then use it like:
-<p className="font-medium text-gray-800 truncate text-sm">
-  {formatNameWithSpace(selectedUser?.name || "Unknown User")}
-</p>
+  const formatNameWithSpace = (name) => {
+    if (!name) return "User";
+    
+    // Add space before capital letters (except first)
+    const formatted = name.replace(/([a-z])([A-Z])/g, '$1 $2');
+    
+    return formatted || name;
+  };
 
   //  RECENT CHATS USE EFFECT
   useEffect(() => {
@@ -343,7 +401,6 @@ const formatNameWithSpace = (name) => {
             name: cleanUserName(
               user.name || user.email?.split("@")[0] || "User",
             ),
-            // Email field removed from display
           }));
         setUsers(filteredUsers);
       } catch (error) {
@@ -447,12 +504,6 @@ const formatNameWithSpace = (name) => {
 
   //  DELETE MESSAGE FUNCTION
   const handleDeleteMessage = async (messageId) => {
-    //  if (!plan.loading && !plan.active) {
-    // alert(
-    //   "Your subscription has expired. Please upgrade to use search features."
-    // );
-    // return;
-    // }
     if (!messageId || !currentUserId) {
       console.error("❌ Cannot delete: missing message ID or user ID");
       return;
@@ -489,6 +540,7 @@ const formatNameWithSpace = (name) => {
       setShowDeleteOption(null);
     }
   };
+
   //  SEND MESSAGE
   const handleSendMessage = async () => {
     // phale status check karega yha pr
@@ -569,25 +621,7 @@ const formatNameWithSpace = (name) => {
     }
   };
 
-  //   //  SEND MESSAGE
-  // const handleSendMessage = async () => {
-  //   // phale status check karega yha pr
-  //   if (!planStatus.active) {
-  //     alert("Your plan has expired. Please upgrade to continue chatting.");
-  //     return;
-  //   }
-
-  //   if (!newMessage.trim() || !selectedUser || !currentUserId) return;
-
-  // //  ADD REACTION - PROPER REAL-TIME HANDLING
-  // const addReaction = async (messageId, emoji) => {
-  //   if (!currentUserId || !messageId) {
-  //     console.error("❌ Cannot add reaction: missing user ID or message ID");
-  //     return;
-  //   }
-
   //  ADD REACTION - PROPER REAL-TIME HANDLING
-
   const addReaction = async (messageId, emoji) => {
     // 🔒 PLAN EXPIRED
     if (!planStatus.active) {
@@ -654,11 +688,6 @@ const formatNameWithSpace = (name) => {
       socketRef.current.connect();
     }
   };
-
-  //  FILE UPLOAD
-  // const handleFileUpload = async (file) => {
-
-  //   if (!selectedUser || !currentUserId) return;
 
   //  FILE UPLOAD
   const handleFileUpload = async (file) => {
@@ -795,6 +824,20 @@ const formatNameWithSpace = (name) => {
     );
   };
 
+  // ✅ SIMPLE FUNCTION FOR GRADIENT COLOR
+  const getGradientColor = (name) => {
+    const nameChar = name?.charAt(0) || 'U';
+    const colors = [
+      'bg-gradient-to-br from-indigo-400 to-purple-500',
+      'bg-gradient-to-br from-green-400 to-blue-500',
+      'bg-gradient-to-br from-pink-400 to-red-500',
+      'bg-gradient-to-br from-yellow-400 to-orange-500',
+      'bg-gradient-to-br from-teal-400 to-cyan-500'
+    ];
+    const index = nameChar.charCodeAt(0) % colors.length;
+    return colors[index];
+  };
+
   // Show login message if no user
   if (!currentUserId) {
     return (
@@ -848,16 +891,23 @@ const formatNameWithSpace = (name) => {
             >
               ← Back
             </button>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+            {/* ✅ PROFILE PICTURE ADDED */}
+            {userProfilePictures[selectedUser.id] ? (
+              <img 
+                src={userProfilePictures[selectedUser.id]} 
+                alt={selectedUser.name}
+                className="w-8 h-8 rounded-full object-cover border-2 border-white shadow"
+              />
+            ) : (
+              <div className={`w-8 h-8 ${getGradientColor(selectedUser.name)} rounded-lg flex items-center justify-center text-white font-bold text-sm`}>
                 {selectedUser.name?.charAt(0)?.toUpperCase() || "U"}
               </div>
-              <div>
-                <p className="font-medium text-gray-800 text-sm">
-                  {selectedUser.name}
-                </p>
-                <p className="text-xs text-gray-500">Online</p>
-              </div>
+            )}
+            <div>
+              <p className="font-medium text-gray-800 text-sm">
+                {selectedUser.name}
+              </p>
+              <p className="text-xs text-gray-500">Online</p>
             </div>
           </div>
         )}
@@ -923,10 +973,18 @@ const formatNameWithSpace = (name) => {
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-gradient-to-br from-green-400 to-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-xs">
-                        {cleanUserName(chat.name)?.charAt(0)?.toUpperCase() ||
-                          "U"}
-                      </div>
+                      {/* ✅ PROFILE PICTURE ADDED */}
+                      {userProfilePictures[chat.user_id] ? (
+                        <img 
+                          src={userProfilePictures[chat.user_id]} 
+                          alt={chat.name}
+                          className="w-8 h-8 rounded-full object-cover border border-gray-200"
+                        />
+                      ) : (
+                        <div className={`w-8 h-8 ${getGradientColor(chat.name)} rounded-lg flex items-center justify-center text-white font-bold text-xs`}>
+                          {cleanUserName(chat.name)?.charAt(0)?.toUpperCase() || "U"}
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-center">
                           <p className="font-medium text-gray-800 truncate text-sm">
@@ -979,14 +1037,22 @@ const formatNameWithSpace = (name) => {
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-xl flex items-center justify-center text-white font-bold text-sm sm:text-base">
-                      {user.name?.charAt(0)?.toUpperCase() || "U"}
-                    </div>
+                    {/* ✅ PROFILE PICTURE ADDED */}
+                    {userProfilePictures[user.id] ? (
+                      <img 
+                        src={userProfilePictures[user.id]} 
+                        alt={user.name}
+                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-white shadow-sm"
+                      />
+                    ) : (
+                      <div className={`w-10 h-10 sm:w-12 sm:h-12 ${getGradientColor(user.name)} rounded-xl flex items-center justify-center text-white font-bold text-sm sm:text-base`}>
+                        {user.name?.charAt(0)?.toUpperCase() || "U"}
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-800 truncate text-sm sm:text-base">
                         {user.name}
                       </p>
-                      {/* Email removed from display */}
                     </div>
                   </div>
                 </div>
@@ -999,17 +1065,25 @@ const formatNameWithSpace = (name) => {
         <div className="flex-1 flex flex-col">
           {selectedUser ? (
             <>
-              {/* Desktop Header */}
+              {/* ✅ Desktop Header with Profile Picture */}
               <div className="hidden md:flex p-4 border-b border-gray-200 bg-white">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-xl flex items-center justify-center text-white font-bold">
-                    {selectedUser.name?.charAt(0)?.toUpperCase() || "U"}
-                  </div>
+                  {/* ✅ PROFILE PICTURE ADDED */}
+                  {userProfilePictures[selectedUser.id] ? (
+                    <img 
+                      src={userProfilePictures[selectedUser.id]} 
+                      alt={selectedUser.name}
+                      className="w-10 h-10 rounded-full object-cover border-2 border-white shadow"
+                    />
+                  ) : (
+                    <div className={`w-10 h-10 ${getGradientColor(selectedUser.name)} rounded-xl flex items-center justify-center text-white font-bold`}>
+                      {selectedUser.name?.charAt(0)?.toUpperCase() || "U"}
+                    </div>
+                  )}
                   <div>
                     <p className="font-medium text-gray-800">
                       {selectedUser.name}
                     </p>
-                    {/* Email line removed */}
                   </div>
                 </div>
               </div>
@@ -1197,7 +1271,7 @@ const formatNameWithSpace = (name) => {
                 <div className="flex gap-2">
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={fileUploading || !planStatus.active} //  यहाँ change
+                    disabled={fileUploading || !planStatus.active}
                     className="px-3 py-2 sm:px-4 sm:py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 disabled:opacity-50 text-sm"
                   >
                     {fileUploading ? "📤" : "📎"}
@@ -1210,19 +1284,6 @@ const formatNameWithSpace = (name) => {
                     accept="*/*"
                   />
 
-                  {/* <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder={
-                      planStatus.active
-                        ? `Message ${selectedUser.name}...`
-                        : "Upgrade plan to send messages..."
-                    }
-                    onKeyPress={handleKeyPress}
-                    className="flex-1 px-3 py-2 sm:px-4 sm:py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm sm:text-base"
-                    disabled={!planStatus.active}
-                  /> */}
                   <input
                     type="text"
                     value={newMessage}
@@ -1331,3 +1392,19 @@ const formatNameWithSpace = (name) => {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
