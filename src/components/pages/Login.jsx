@@ -3,8 +3,8 @@ import { useNavigate, Link } from "react-router-dom";
 import { loginUser } from "../services/api";
 import { useUserProfile } from "../context/UseProfileContext";
 import { FaLinkedin } from "react-icons/fa";
+//import LinkedInLoginButton from "../social/LinkedInLoginButton";
 import LinkedInLoginButton from "../social/LinkedInLoginButton";
-
 export default function Login() {
   const navigate = useNavigate();
   const { updateProfile, refreshProfile } = useUserProfile();
@@ -83,7 +83,7 @@ const handleLinkedInLogin = async () => {
         const backendUrl = import.meta.env.VITE_API_BASE_URL || 'https://backend-q0wc.onrender.com';
         const apiUrl = `${backendUrl}/api/linkedin/auth-url`;
         
-        console.log('📞 Calling backend:', apiUrl);
+        console.log('📞 Calling backend for LinkedIn URL:', apiUrl);
         
         const response = await fetch(apiUrl);
         
@@ -92,7 +92,7 @@ const handleLinkedInLogin = async () => {
         }
         
         const data = await response.json();
-        console.log('✅ Backend response:', data);
+        console.log('✅ Backend LinkedIn response:', data);
         
         // ✅ IMPORTANT: Backend { url: '...' } format में return कर रहा है
         if (data.url) {
@@ -115,6 +115,7 @@ const handleLinkedInLogin = async () => {
     const token = localStorage.getItem("accessToken");
     if (token) {
       console.log("🔄 User already logged in, redirecting to dashboard");
+      navigate("/dashboard");
     }
   }, [navigate]);
 
