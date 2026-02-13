@@ -31,7 +31,6 @@ export default function AdminPlans({
     people_search_limit: 0,
     people_message_limit: 0,
     audio_call_limit: 0,
-    type: "",
     billigng_info: "",
   });
 
@@ -53,6 +52,9 @@ export default function AdminPlans({
   }, []);
 
   const handleChange = (e) => {
+    if(e.target.name === "is_active") {
+      setFormData({...formData, [e.target.name]: Number(e.target.value)})
+    }
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
@@ -118,7 +120,7 @@ export default function AdminPlans({
               </div>
 
               <ul className="text-gray-700 text-sm mb-4">
-                <li className="mb-1">Duration: {plan.duration} Months</li>
+                <li className="mb-1">Duration: {plan.duration} Days</li>
 
                 <p>{plan.description}</p>
 
