@@ -85,7 +85,7 @@ export default function CartItem({ item, handleRemove /* OLD: , handleBuy */ }) 
           {item.plan.duration &&
             <>
               <li className="flex items-center gap-2">
-                 Duration : {item.plan.duration} Months
+                 Duration : {item.plan.duration} Days
               </li>
             </>
           }

@@ -11,7 +11,7 @@ export default function PlanCard({ plan, config, theme, addToCart, handleBuy }) 
                 <p>{plan.description}</p>
 
               <ul className="text-gray-700 text-sm mb-4">
-                    {plan.duration && <li>Duration: {plan.duration} Months</li>}
+                    {plan.duration && <li>Duration: {plan.duration} Days</li>}
                     {plan.video_call_limit > 0 && (
                         <li>Video Calls: {plan.video_call_limit}</li>
                     )}
