@@ -856,12 +856,6 @@ export default PrivacyPolicy;
 
 
 
-
-
-
-
-
-// // PrivacyPolicyFull.jsx
 // import React, { useState } from 'react';
 // import { 
 //   FaChevronDown, 

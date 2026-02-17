@@ -32,7 +32,7 @@ userApi.interceptors.response.use(
   }
 );
 
-// ✅ USER APIs
+//  USER APIs
 export const userAPI = {
   // 🔐 PLAN STATUS
   getPlanStatus: () => userApi.get("/api/me/plan-status"),

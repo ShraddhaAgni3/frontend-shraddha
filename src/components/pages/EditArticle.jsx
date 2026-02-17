@@ -45,9 +45,6 @@ export default function EditArticle({ user }) {
   };
 
    const handleBack = () => {
-    // Admin dashboard पर वापस जाएँ
-    // navigate("/admin-dashboard");
-    // या फिर पिछले पेज पर जाने के लिए:
     navigate(-1);
   };
 

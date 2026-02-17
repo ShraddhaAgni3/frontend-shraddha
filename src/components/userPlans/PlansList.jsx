@@ -10,7 +10,7 @@ export default function PlansList({ plans, config, planThemes, addToCart, handle
                     <PlanCard
                         key={plan.id}
                         plan={plan}
-                        config={config} // ✅ send config
+                        config={config} //  send config
                         theme={theme}
                         addToCart={addToCart}
                         handleBuy={handleBuy}

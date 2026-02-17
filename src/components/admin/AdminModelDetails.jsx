@@ -646,11 +646,11 @@ export default function AdminModelDetails() {
                     "bg-red-100 text-red-800"}`}>
                   {model.status?.toUpperCase() || "IN PROCESS"}
                 </span>
-                <span className="text-xs sm:text-sm text-gray-600">
-                  ID: #{model.user_id || model.id}
+                <span className="text-xs sm:text-sm text-gray-600 px-2 rounded-xl bg-gray-100">
+                  ID: {model.user_id || model.id}
                 </span>
               </div>
-            </div>
+          
 
             {/* Mobile Menu Button */}
             <button
@@ -690,6 +690,7 @@ export default function AdminModelDetails() {
               Approve User
             </button>
           </div>
+            </div>
 
           {/* Action Buttons - Mobile (Collapsible) */}
           {showMobileMenu && (
@@ -754,7 +755,7 @@ export default function AdminModelDetails() {
             </h1>
 
             <p className="text-base sm:text-lg md:text-xl text-gray-600 mt-1 sm:mt-2 break-words">
-              {model.headline || model.profession || "No Profession"}
+              {model.profession || "No Profession"}
             </p>
 
             <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-2 sm:mt-3 justify-center">

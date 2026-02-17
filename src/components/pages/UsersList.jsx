@@ -6,7 +6,7 @@ import { useAdminReport } from "../context/AdminReportContext";
 
 const UsersList = () => {
   const { type } = useParams();
-  const { fromDate, toDate } = useAdminReport(); // ✅ selected dates from report
+  const { fromDate, toDate } = useAdminReport(); //  selected dates from report
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);

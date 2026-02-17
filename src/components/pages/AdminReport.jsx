@@ -13,13 +13,13 @@ import { useAdminReport } from "../context/AdminReportContext";
 const AdminReport = () => {
   const navigate = useNavigate();
 
-  // ✅ moved to Context (so browser back doesn't reset)
+  //  moved to Context (so browser back doesn't reset)
   const { fromDate, setFromDate, toDate, setToDate, report, setReport } =
     useAdminReport();
 
   const [loading, setLoading] = useState(false);
 
-  // ✅ Not Renewed count for StatCard
+  //  Not Renewed count for StatCard
   const [notRenewedCount, setNotRenewedCount] = useState(0);
 const [notRenewedLoading, setNotRenewedLoading] = useState(false);
   // useEffect(() => {
@@ -38,7 +38,7 @@ const [notRenewedLoading, setNotRenewedLoading] = useState(false);
 
   useEffect(() => {
   const fetchNotRenewedCount = async () => {
-    // ✅ report generate hone ke baad hi count fetch karo
+    //  report generate hone ke baad hi count fetch karo
     if (!report || !fromDate || !toDate) {
       setNotRenewedCount(0);
       return;
@@ -47,7 +47,7 @@ const [notRenewedLoading, setNotRenewedLoading] = useState(false);
     try {
       setNotRenewedLoading(true);
 
-      // ✅ IMPORTANT: dates pass karo
+      //  IMPORTANT: dates pass karo
       const res = await fetchNotRenewedUsers(fromDate, toDate);
       setNotRenewedCount((res?.data || []).length);
     } catch (e) {

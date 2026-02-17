@@ -304,8 +304,6 @@ export default TermsAndConditions;
 
 
 
-
-// // TermsAndConditions.jsx
 // import React from 'react';
 // import { 
 //   FaFileContract,

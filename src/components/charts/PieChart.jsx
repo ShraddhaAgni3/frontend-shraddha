@@ -15,7 +15,7 @@ const PieChart = ({ data = [], title }) => {
     <div className="bg-white p-4 rounded shadow w-full">
       <h3 className="font-semibold mb-4 text-gray-700">{title}</h3>
 
-      {/* ✅ FIX: give fixed height to ResponsiveContainer */}
+      {/*  FIX: give fixed height to ResponsiveContainer */}
       <ResponsiveContainer width="100%" height={300} minWidth={100} debounce={200}>
         <RechartsPie>
           <Pie

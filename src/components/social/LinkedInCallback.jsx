@@ -7,7 +7,6 @@ const LinkedInCallback = () => {
     const { updateProfile, refreshProfile } = useUserProfile();
     const [status, setStatus] = useState('Processing login...');
 
-   // LinkedInCallback.jsx में useEffect के अंदर
 useEffect(() => {
     const handleCallback = async () => {
         const code = searchParams.get('code');
@@ -28,7 +27,7 @@ useEffect(() => {
         try {
             setStatus('Verifying LinkedIn authentication...');
             
-            // ✅ CORRECT Backend URL
+            //  CORRECT Backend URL
             const backendUrl = import.meta.env.VITE_API_BASE_URL || 'https://backend-q0wc.onrender.com';
             const apiUrl = `${backendUrl}/api/linkedin/callback?code=${code}`;
             
@@ -44,7 +43,7 @@ useEffect(() => {
             const data = await response.json();
             console.log('✅ Backend response:', data);
             
-            // ✅ Check response structure
+            //  Check response structure
             if (data.success && data.token) {
                 // Save tokens
                 localStorage.setItem('accessToken', data.token);

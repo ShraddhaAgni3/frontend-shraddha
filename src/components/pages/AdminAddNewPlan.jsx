@@ -9,7 +9,7 @@ const CONFIG_URL = "https://backend-q0wc.onrender.com/api/admin/configurations";
 export default function AdminAddNewPlan() {
     const navigate = useNavigate();
     const [plans, setPlans] = useState([]);
-    const [config, setConfig] = useState({}); // ✅ new state
+    const [config, setConfig] = useState({}); // new state
     const [formData, setFormData] = useState({
         name: "",
         description: "",
@@ -88,7 +88,7 @@ export default function AdminAddNewPlan() {
                 editingId={editingId}
                 setEditingId={setEditingId}
                 formData={formData}
-                config={config} // ✅ pass config to form
+                config={config} //  pass config to form
             />
         </>
     )

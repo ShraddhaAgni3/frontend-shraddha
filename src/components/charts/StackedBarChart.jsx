@@ -21,7 +21,7 @@ const StackedBarChart = ({ data = [], title }) => {
     <div className="bg-white p-4 rounded shadow w-full">
       <h3 className="font-semibold mb-4 text-gray-700">{title}</h3>
 
-      {/* ✅ FIX: fixed height */}
+      {/*  FIX: fixed height */}
       <ResponsiveContainer width="100%" height={350} minWidth={100} debounce={200}>
         <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" />

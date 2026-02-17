@@ -1,9 +1,4 @@
 
-
-
-
-
-
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { getUserProfile } from "../services/api";
 

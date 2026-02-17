@@ -87,7 +87,7 @@ export const chatApi = {
 
   markChatAsRead: (notificationId) => {
     return api.put(`/api/notifications/read/${notificationId}`);
-  },
+  }, 
 
   // Get user notifications
   getUserNotifications: (userId) => {

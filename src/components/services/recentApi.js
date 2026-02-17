@@ -1,11 +1,10 @@
 // import api from "./axiosConfig"; 
 import api from "./axiosConfig";
-// ⚠️ agar tumhara axiosConfig ka naam alag hai
-// to yahan wahi import karo (ex: ../api/api)
+
 
 const viewApi = {
   // ===============================
-  // ✅ TRACK PROFILE VIEW
+  //  TRACK PROFILE VIEW
   // ===============================
   trackProfileView: async (viewedId) => {
     try {
@@ -18,7 +17,7 @@ const viewApi = {
   },
 
   // ===============================
-  // ✅ GET RECENT VIEWERS
+  // GET RECENT VIEWERS
   // ===============================
   getRecentViewers: async (userId) => {
     try {
@@ -40,7 +39,7 @@ const viewApi = {
   },
 
   // ===============================
-  // ✅ GET USER PROFILE
+  //  GET USER PROFILE
   // ===============================
   getUserProfile: async (userId) => {
     try {
@@ -53,7 +52,7 @@ const viewApi = {
   },
 
   // ===============================
-  // ✅ DASHBOARD SUMMARY
+  // DASHBOARD SUMMARY
   // ===============================
   getDashboardSummary: async (userId) => {
     try {

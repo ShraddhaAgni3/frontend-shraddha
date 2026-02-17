@@ -83,7 +83,7 @@ export const adminAPI = {
   getMemberApproval: () =>
   api.get('/api/settings/get-member-approval'),
 
-// 🔥 UPDATE MEMBER APPROVAL SETTING
+//  UPDATE MEMBER APPROVAL SETTING
 updateMemberApproval: (data) =>
   api.put('/api/settings/update-member-approval', data),
 };
