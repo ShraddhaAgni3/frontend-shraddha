@@ -1,176 +1,98 @@
 import React, { useEffect, useState } from "react";
-//import Navbar from "../../Navbar/Navbar";
 import { useNavigate } from "react-router-dom";
-// import {
-//     fetchCartItems,
-//     removeFromCart,
-// } from "../../api/cart";
-
 import { fetchCartItems, removeFromCart } from "../services/cart.js";
-//import CartList from "../../components/cart/CartList.jsx";
 import CartList from "../cart/CartList.jsx";
+import { toast } from "react-toastify";
+
 export default function Cart() {
   const [cartItems, setCartItems] = useState([]);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const userId = 1; // static for demo
 
+  // This runs as soon as the page opens
   useEffect(() => {
     loadCart();
   }, []);
 
+  /**
+   * 🔄 LOAD CART DATA
+   * This function pulls the latest data directly from the database server.
+   * By fetching from the server, we ensure that every user sees ONLY their own products.
+   */
   const loadCart = async () => {
     try {
-      const data = await fetchCartItems(userId);
+      setLoading(true);
+      const data = await fetchCartItems();
       setCartItems(data);
+
+      // Update the local storage count so the Header shows the correct number
+      localStorage.setItem("cart_count", data.length);
+      window.dispatchEvent(new Event("cartUpdated"));
     } catch (err) {
-      console.error("Error fetching cart:", err);
+      console.error("❌ Error fetching cart:", err);
+      // If the user isn't logged in, the server will error and we send them to login
+      if (err.response?.status === 404 || err.response?.status === 500) {
+        // This might happen if the token is missing or invalid
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
-// const handleRemove = async (id) => {
-//   try {
-//     console.log(" Removing item ID:", id);
-//     console.log(" Removing item ID type:", typeof id);
-    
-//     //  1. Pehle curent car ke liye hai 
-//     const existingCart = JSON.parse(localStorage.getItem("cart") || "[]");
-//     console.log(" BEFORE - Cart items:", existingCart);
-//     console.log(" BEFORE - Cart items IDs:", existingCart.map(item => item.id));
-    
-//     //  2. Filter kar rha hai 
-//     const updatedCart = existingCart.filter((item) => {
-//       console.log(`omparing: item.id=${item.id} (${typeof item.id}) vs id=${id} (${typeof id})`);
-//       return item.id != id; // Double equals se compare karo (string vs number)
-//     });
-    
-//     console.log(" AFTER - Updated cart:", updatedCart);
-    
-//     // 3. LocalStorage update
-//     localStorage.setItem("cart", JSON.stringify(updatedCart));
-    
-//     //  4. Console mein check karo
-//     const checkCart = JSON.parse(localStorage.getItem("cart") || "[]");
-//     console.log(" CHECK - Cart after localStorage update:", checkCart);
-    
-//     //  5. Events trigger
-//     window.dispatchEvent(new Event("cartUpdated"));
-    
-//     //  6. State update
-//     setCartItems(updatedCart);
-    
-//     //  7. API call
-//     await removeFromCart(id);
-    
-//   } catch (err) {
-//     console.error("❌ Error removing item:", err);
-//   }
-// };
+  /**
+   * 🗑️ REMOVE ITEM
+   * This handles the removal of a single item when the user clicks "Delete".
+   */
+  const handleRemove = async (cartItemId) => {
+    try {
+      // 1. Tell the server to delete the item from the database
+      // This is the source of truth—it prevents "ghost items" or multiple deletions.
+      await removeFromCart(cartItemId);
 
-// // Option 2: Even better solution
-// const handleRemove = async (id) => {
-//   try {
-//     // 1. Get cart
-//     const existingCart = JSON.parse(localStorage.getItem("cart") || "[]");
-    
-//     // 2. Remove item
-//     const updatedCart = existingCart.filter((item) => item.id !== id);
-    
-//     // 3. Save to localStorage
-//     localStorage.setItem("cart", JSON.stringify(updatedCart));
-    
-//     // 4. UPDATE COUNT IMMEDIATELY - No waiting for events
-//     // Force update header count directly
-//     if (window.updateCartCountImmediately) {
-//       window.updateCartCountImmediately(updatedCart.length);
-//     }
-    
-//     // 5. Trigger events
-//     window.dispatchEvent(new Event("cartUpdated"));
-    
-//     // 6. Update state
-//     setCartItems(updatedCart);
-    
-//     // 7. API call
-//     await removeFromCart(id);
-    
-//   } catch (err) {
-//     console.error("Error removing item:", err);
-//   }
-// };
+      // 2. Refresh the UI by removing it from our local state
+      const updatedList = cartItems.filter((item) => item.id !== cartItemId);
+      setCartItems(updatedList);
 
+      // 3. Keep the shared counter in sync
+      localStorage.setItem("cart_count", updatedList.length);
+      window.dispatchEvent(new Event("cartUpdated"));
 
-const handleRemove = async (id) => {
-  try {
-    // 1. Get current cart from localStorage
-    const existingCart = JSON.parse(localStorage.getItem("cart") || "[]");
-    
-    // 2. Remove the item
-    const updatedCart = existingCart.filter((item) => item.id != id); // Use != for string/number comparison
-    
-    // 3. Save to localStorage
-    localStorage.setItem("cart", JSON.stringify(updatedCart));
-    
-    // 4. DIRECT COUNTER UPDATE - YEH LINE ADD KARNA HAI
-    // Update header counter immediately
-    const cartCountElement = document.querySelector('.cart-count, [data-cart-count]');
-    if (cartCountElement) {
-      cartCountElement.textContent = updatedCart.length;
-      cartCountElement.setAttribute('data-count', updatedCart.length);
+      toast.success("Successfully removed from your cart.");
+    } catch (err) {
+      console.error("❌ Error removing item:", err);
+      toast.error("Could not remove the item. Please try again.");
     }
-    
-    // 5. Trigger custom event for other components
-    window.dispatchEvent(new Event("cartUpdated"));
-    window.dispatchEvent(new Event("storage")); // For localStorage listeners
-    
-    // 6. Update state
-    setCartItems(updatedCart);
-    
-    // 7. API call
-    await removeFromCart(id);
-    
-  } catch (err) {
-    console.error("Error removing item:", err);
-  }
-};
+  };
 
-
-  // const handleRemove = async (id) => {
-  //   try {
-  //     //  YEH 4 LINES ADD KARO - LocalStorage update ke liye (API se PEHLE)
-  //     const existingCart = JSON.parse(localStorage.getItem("cart") || "[]");
-  //     const updatedCart = existingCart.filter((item) => item.id !== id);
-  //     localStorage.setItem("cart", JSON.stringify(updatedCart));
-
-  //     //  Cart count update ke liye
-  //     window.dispatchEvent(new Event("storage"));
-  //     window.dispatchEvent(new Event("cartUpdated"));
-
-  //     //  YEH LINE PEHLE SE HAI - State update
-  //     setCartItems(cartItems.filter((item) => item.id !== id));
-
-  //     //  YEH LINE PEHLE SE HAI - API call
-  //     await removeFromCart(id);
-  //   } catch (err) {
-  //     console.error("Error removing item:", err);
-  //   }
-  // };
-
-
+  /**
+   * 🎁 BUY ACTION
+   * Simple placeholder for the checkout flow.
+   */
   const handleBuy = async (item) => {
-    console.log("Buying plan:", item);
-    alert("Plan details are loading");
+    console.log("Preparing to purchase plan:", item);
+    // Real logic is handled inside individual CartItems now (refer to CartItem.jsx)
   };
 
   return (
-    <div className="max-w-5xl mx-auto my-12 px-4">
+    <div className="max-w-5xl mx-auto my-12 px-4 min-h-[50vh]">
       <h2 className="text-center font-bold text-3xl mb-8 flex items-center justify-center gap-2">
         <i className="fa-solid fa-cart-shopping text-blue-600"></i>
-        Your Cart
+        My Individual Cart
       </h2>
 
-      {cartItems.length === 0 ? (
-        <div className="text-center mt-10">
-          <h5 className="text-gray-600 text-lg">Your cart is empty 😕</h5>
+      {loading ? (
+        <div className="flex justify-center items-center py-20">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      ) : cartItems.length === 0 ? (
+        <div className="text-center mt-20 p-10 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+          <h5 className="text-gray-500 text-xl font-medium">Your cart is empty currently. 🛒</h5>
+          <button
+            onClick={() => navigate("/plans")}
+            className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          >
+            Browse Plans
+          </button>
         </div>
       ) : (
         <CartList
