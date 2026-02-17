@@ -49,32 +49,32 @@ export const addToCart = async (planId) => {
 
 
 
-// Remove from cart
-export const removeFromCart = async (id) => {
-    const res = await axios.delete(`${BASE_URL}/${id}`);
-    return res.data;
-};
+// // Remove from cart
+// export const removeFromCart = async (id) => {
+//     const res = await axios.delete(`${BASE_URL}/${id}`);
+//     return res.data;
+// };
 
-// Buy item
-export const buyCartItem = async (id) => {
-    const res = await axios.put(`${BASE_URL}/buy/${id}`);
+// // Buy item
+// export const buyCartItem = async (id) => {
+//     const res = await axios.put(`${BASE_URL}/buy/${id}`);
 
-/**
- * ➖ REMOVE FROM CART
- * Tells the server to delete a specific item from the cart.
- */
-export const removeFromCart = async (cartItemId) => {
-    // We use the unique ID of the cart record to make sure we remove the right item.
-    const res = await axios.delete(`${BASE_URL}/${cartItemId}`, getAuthHeaders());
-    return res.data;
-};
+// /**
+//  * ➖ REMOVE FROM CART
+//  * Tells the server to delete a specific item from the cart.
+//  */
+// export const removeFromCart = async (cartItemId) => {
+//     // We use the unique ID of the cart record to make sure we remove the right item.
+//     const res = await axios.delete(`${BASE_URL}/${cartItemId}`, getAuthHeaders());
+//     return res.data;
+// };
 
-/**
- * 💳 BUY ITEM
- * Finalizes the purchase for an item in the cart.
- */
-export const buyCartItem = async (cartItemId) => {
-    const res = await axios.put(`${BASE_URL}/buy/${cartItemId}`, {}, getAuthHeaders());
+// /**
+//  * 💳 BUY ITEM
+//  * Finalizes the purchase for an item in the cart.
+//  */
+// export const buyCartItem = async (cartItemId) => {
+//     const res = await axios.put(`${BASE_URL}/buy/${cartItemId}`, {}, getAuthHeaders());
 
-    return res.data;
-};
+//     return res.data;
+// };
