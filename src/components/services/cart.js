@@ -3,14 +3,6 @@ import axios from "axios";
 // This is the location of our backend server
 const BASE_URL = "https://backend-q0wc.onrender.com/api/cart";
 
-//  Get all cart items by user_id
-export const fetchCartItems = async (userId) => {
-    const res = await axios.get(`${BASE_URL}/${userId}`);
-    return res.data;
-};
-
-//  Add to cart
-export const addToCart = async (planId, userId) => {
 /**
  * 🛠️ CONFIGURATION HELPER
  * This function handles adding the user's "Login Pass" (JWT Token) to every request.
@@ -47,34 +39,21 @@ export const addToCart = async (planId) => {
     return res.data;
 };
 
+/**
+ * ➖ REMOVE FROM CART
+ * Tells the server to delete a specific item from the cart.
+ */
+export const removeFromCart = async (cartItemId) => {
+    // We use the unique ID of the cart record to make sure we remove the right item.
+    const res = await axios.delete(`${BASE_URL}/${cartItemId}`, getAuthHeaders());
+    return res.data;
+};
 
-
-// // Remove from cart
-// export const removeFromCart = async (id) => {
-//     const res = await axios.delete(`${BASE_URL}/${id}`);
-//     return res.data;
-// };
-
-// // Buy item
-// export const buyCartItem = async (id) => {
-//     const res = await axios.put(`${BASE_URL}/buy/${id}`);
-
-// /**
-//  * ➖ REMOVE FROM CART
-//  * Tells the server to delete a specific item from the cart.
-//  */
-// export const removeFromCart = async (cartItemId) => {
-//     // We use the unique ID of the cart record to make sure we remove the right item.
-//     const res = await axios.delete(`${BASE_URL}/${cartItemId}`, getAuthHeaders());
-//     return res.data;
-// };
-
-// /**
-//  * 💳 BUY ITEM
-//  * Finalizes the purchase for an item in the cart.
-//  */
-// export const buyCartItem = async (cartItemId) => {
-//     const res = await axios.put(`${BASE_URL}/buy/${cartItemId}`, {}, getAuthHeaders());
-
-//     return res.data;
-// };
+/**
+ * 💳 BUY ITEM
+ * Finalizes the purchase for an item in the cart.
+ */
+export const buyCartItem = async (cartItemId) => {
+    const res = await axios.put(`${BASE_URL}/buy/${cartItemId}`, {}, getAuthHeaders());
+    return res.data;
+};
