@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useUserProfile } from "../context/UseProfileContext";
@@ -7,7 +6,6 @@ import LifeRhythmsForm from "./LifeRhythmsForm";
 import axios from "axios";
 import InterestsForm from "./InterestsForm";
 import ProfileQuestions from "./ProfileQuestions";
-
 
 // ================== ENUM HELPERS ==================
 
@@ -142,9 +140,6 @@ const mapToDBEnum = (field, value) => {
       "Prefer not to say": "Prefer not to say",
     },
 
-  
-
-
     // Smoking
     smoking: {
       NO: "No",
@@ -164,8 +159,6 @@ const mapToDBEnum = (field, value) => {
       Yes: "Yes",
       Socially: "Socially",
     },
-
-
 
     // Work Environment
     work_environment: {
@@ -383,17 +376,17 @@ const mapToUIEnum = (field, value) => {
       "Project-based": "Seasonal",
       "Travel-heavy": "Seasonal",
     },
-     drinking: {
-      "NO": "No",
-      "YES": "Yes",
-      "SOCIAL": "Socially",
+    drinking: {
+      NO: "No",
+      YES: "Yes",
+      SOCIAL: "Socially",
     },
-    
+
     // Smoking reverse mapping
     smoking: {
-      "NO": "No",
-      "YES": "Yes",
-      "SOCIAL": "Socially",
+      NO: "No",
+      YES: "Yes",
+      SOCIAL: "Socially",
     },
   };
 
@@ -480,6 +473,7 @@ export default function EditProfilePage() {
     email: "",
     phone: "",
     age: "",
+    ai_detected_at: "",
     dob: "",
     gender: "",
     education: "",
@@ -610,6 +604,7 @@ export default function EditProfilePage() {
           ...prev,
           age: faceData.age,
           gender: faceData.gender || prev.gender,
+          ai_detected_at: new Date().toISOString(),
         }));
       }
 
@@ -622,47 +617,46 @@ export default function EditProfilePage() {
       setImageLoading(false);
     }
   };
-useEffect(() => {
-  const handleMessage = (event) => {
-    if (event.data.type === "FACE_DETECTED") {
+  useEffect(() => {
+    const handleMessage = (event) => {
+      if (event.data.type === "FACE_DETECTED") {
+        setFormData((prev) => ({
+          ...prev,
+          age: event.data.age,
+          gender: event.data.gender,
+          ai_detected_at: event.data.detectedAt || new Date().toISOString(),
+        }));
 
-      setFormData(prev => ({
-        ...prev,
-        age: event.data.age,
-        gender: event.data.gender,
-      }));
+        setImagePreview(event.data.image);
 
-      setImagePreview(event.data.image);
+        // 🔥 CONVERT BASE64 TO FILE
+        fetch(event.data.image)
+          .then((res) => res.blob())
+          .then(async (blob) => {
+            const file = new File([blob], "camera.png", {
+              type: "image/png",
+            });
 
-      // 🔥 CONVERT BASE64 TO FILE
-      fetch(event.data.image)
-        .then(res => res.blob())
-        .then(async (blob) => {
-          const file = new File([blob], "camera.png", {
-            type: "image/png",
+            const imageUrl = await handleImageUpload(file);
+
+            if (imageUrl) {
+              setFinalProfileImage(imageUrl); // 🔥 THIS IS CRITICAL
+            }
           });
 
-          const imageUrl = await handleImageUpload(file);
+        setShowCamera(false);
+      }
 
-          if (imageUrl) {
-            setFinalProfileImage(imageUrl);  // 🔥 THIS IS CRITICAL
-          }
-        });
+      if (event.data.type === "CLOSE_CAMERA") {
+        setShowCamera(false);
+      }
+    };
 
-      setShowCamera(false);
-    }
-
-    if (event.data.type === "CLOSE_CAMERA") {
-      setShowCamera(false);
-    }
-  };
-
-  window.addEventListener("message", handleMessage);
-  return () => {
-    window.removeEventListener("message", handleMessage);
-  };
-}, []);
-
+    window.addEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+    };
+  }, []);
 
   useEffect(() => {
     if (!profile) return;
@@ -768,6 +762,7 @@ useEffect(() => {
 
       hobbies: Array.isArray(profile.hobbies) ? profile.hobbies.join(", ") : "",
       height: heightDisplay,
+
       marital_status: profile.marital_status || "",
       professional_identity: mapToUIEnum(
         "professional_identity",
@@ -782,8 +777,8 @@ useEffect(() => {
       health_activity_level: profile.health_activity_level || "",
       // smoking: profile.smoking || "",
       // drinking: profile.drinking || "",
-       drinking: mapToDBEnum("drinking", formData.drinking),
-    smoking: mapToDBEnum("smoking", formData.smoking),
+      drinking: mapToDBEnum("drinking", formData.drinking),
+      smoking: mapToDBEnum("smoking", formData.smoking),
       pets_preference: profile.pets_preference || "",
       religious_belief: profile.religious_belief || "",
       zodiac_sign: profile.zodiac_sign || "",
@@ -950,6 +945,7 @@ useEffect(() => {
         hobbies: handleArrayField(formData.hobbies),
         height_ft: height_ft,
         height_in: height_in,
+        ai_detected_at: formData.ai_detected_at || null,
         life_rhythms: formData.life_rhythms,
         company_type: formData.company_type || null,
         education_institution_name: formData.education_institution_name || null,
@@ -1245,27 +1241,25 @@ useEffect(() => {
       setImageLoading(false);
     }
   };
-const handleImageSelect = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+  const handleImageSelect = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-  const reader = new FileReader();
+    const reader = new FileReader();
 
-  reader.onload = () => {
-    setImagePreview(reader.result);
+    reader.onload = () => {
+      setImagePreview(reader.result);
+    };
+
+    reader.readAsDataURL(file);
+
+    const imageUrl = await handleImageUpload(file);
+    if (imageUrl) {
+      setFinalProfileImage(imageUrl);
+    }
+
+    await handleFaceDetection(file);
   };
-
-  reader.readAsDataURL(file);
-
-  const imageUrl = await handleImageUpload(file);
-  if (imageUrl) {
-    setFinalProfileImage(imageUrl);
-  }
-
-  await handleFaceDetection(file);
-};
-
-
 
   const handleRemoveProfilePic = async () => {
     if (
@@ -1291,10 +1285,11 @@ const handleImageSelect = async (e) => {
     }
   };
 
-const CAMERA_URL =
-  import.meta.env.MODE === "development"
-    ? "https://python-backend-oo6l.onrender.com"
-    : import.meta.env.VITE_FACE_CAMERA_URL || "https://python-backend-oo6l.onrender.com";
+  const CAMERA_URL =
+    import.meta.env.MODE === "development"
+      ? "https://python-backend-oo6l.onrender.com"
+      : import.meta.env.VITE_FACE_CAMERA_URL ||
+        "https://python-backend-oo6l.onrender.com";
 
   //  interests_categories से total interests calculate करो
   const totalCheckboxInterests =
@@ -1559,6 +1554,24 @@ const CAMERA_URL =
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     />
                   </div>
+                  {/* 
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Age
+                    </label>
+                    <input
+                      type="number"
+                      name="age"
+                      value={formData.age}
+                      onChange={handleChange}
+                      placeholder="25"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Age & gender are AI-estimated (±10% tolerance). You can
+                      edit them.
+                    </p>
+                  </div> */}
 
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -1575,6 +1588,12 @@ const CAMERA_URL =
                     <p className="text-xs text-gray-500 mt-1">
                       Age & gender are AI-estimated (±10% tolerance). You can
                       edit them.
+                      {formData.ai_detected_at && (
+                        <span className="block text-indigo-600 mt-1">
+                          Detected on{" "}
+                          {new Date(formData.ai_detected_at).toLocaleString()}
+                        </span>
+                      )}
                     </p>
                   </div>
 
@@ -2711,20 +2730,19 @@ const CAMERA_URL =
           </div>
         </form>
       </div>
-       {showCamera && (
-  <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-    <div className="bg-white rounded-lg overflow-hidden">
-      <iframe
-        src="https://python-backend-oo6l.onrender.com"
-        width="400"
-        height="600"
-        allow="camera"
-        className="border-none"
-      />
-    </div>
-  </div>
-)}
-
+      {showCamera && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg overflow-hidden">
+            <iframe
+              src="https://python-backend-oo6l.onrender.com"
+              width="400"
+              height="600"
+              allow="camera"
+              className="border-none"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Life Rhythms Modal */}
       {showLifeRhythms && (
@@ -2756,301 +2774,3 @@ const CAMERA_URL =
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

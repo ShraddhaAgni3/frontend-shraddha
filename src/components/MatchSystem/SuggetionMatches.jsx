@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getSuggestedMatches } from "../services/chatApi";
-import api from "../services/api"; // Your axios instance
+import api from "../services/api"; 
 
 const SuggestedMatches = () => {
   const navigate = useNavigate();
@@ -10,7 +10,7 @@ const SuggestedMatches = () => {
   const [suggestedMatches, setSuggestedMatches] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [loadingProfileId, setLoadingProfileId] = useState(null); // Track which profile is loading
+  const [loadingProfileId, setLoadingProfileId] = useState(null);  
 
   // Fetch matches on component mount
   useEffect(() => {
@@ -34,7 +34,7 @@ const SuggestedMatches = () => {
         if (matches && Array.isArray(matches)) {
           console.log(" Setting matches to state:", matches.length);
           setSuggestedMatches(matches);
-          return;
+          return;b 
         }
       } catch (firstError) {
         console.log("⚠️ getSuggestedMatches failed, trying adminAPI...");

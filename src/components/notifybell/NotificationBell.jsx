@@ -1,5 +1,5 @@
 
-// components/NotificationBell.jsx - FINAL FIX (Only one change)
+// components/NotificationBell.jsx 
 import React, { useState, useEffect, useRef } from "react";
 import { adminAPI } from "../services/adminApi";
 import { chatApi } from "../services/chatApi";
@@ -77,7 +77,7 @@ const NotificationBell = () => {
     return "❤️";
   };
 
-  // ✅ FIXED: Only show type:null for ADMIN notifications
+  //  FIXED: Only show type:null for ADMIN notifications
   const fetchNotifications = async () => {
     const userId = getUserId();
     
@@ -285,8 +285,8 @@ const NotificationBell = () => {
 
           {/* WELCOME MESSAGE */}
           <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 border-b border-gray-200">
-            <p className="font-medium text-gray-800">Welcome back, imran!</p>
-            <p className="text-sm text-gray-600">Ready to find your perfect match?</p>
+            {/* <p className="font-medium text-gray-800">Welcome back, {currentUser?.name || "User"}!</p> */}
+            {/* <p className="text-sm text-gray-600">Ready to find your perfect match?</p> */}
           </div>
 
           {/* NOTIFICATIONS LIST */}

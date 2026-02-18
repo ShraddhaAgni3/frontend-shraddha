@@ -321,7 +321,7 @@ export default function ProfilePage() {
                 "No Profession"}
             </p> */}
 
-               <p className="text-lg md:text-xl text-gray-600 mt-2">
+            <p className="text-lg md:text-xl text-gray-600 mt-2">
               {displayProfile.profession ||
                 displayProfile.headline ||
                 "No Profession"}
@@ -428,11 +428,34 @@ export default function ProfilePage() {
                   type="email"
                 />
                 <InfoItem label="Phone" value={displayProfile.phone} />
+                {/* <InfoItem
+                  label="Date of Birth"
+                  value={formatDateForDisplay(displayProfile.dob)}
+                /> */}
+
                 <InfoItem
                   label="Date of Birth"
                   value={formatDateForDisplay(displayProfile.dob)}
                 />
-                <InfoItem label="Age" value={displayProfile.age} />
+
+                <div>
+                  <InfoItem label="Age" value={displayProfile.age} />
+
+                  {displayProfile.ai_detected_at && (
+                    <p className="text-xs text-indigo-600 mt-1">
+                      AI estimated (±10% tolerance) •{" "}
+                      {new Date(
+                        displayProfile.ai_detected_at,
+                      ).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </p>
+                  )}
+                </div>
+
+                {/* <InfoItem label="Age" value={displayProfile.age} /> */}
                 <InfoItem label="Gender" value={displayProfile.gender} />
                 <InfoItem
                   label="Marital Status"
@@ -1223,5 +1246,3 @@ function Section({ title, children }) {
     </div>
   );
 }
-
-

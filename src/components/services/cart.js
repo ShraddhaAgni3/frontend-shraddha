@@ -56,4 +56,4 @@ export const removeFromCart = async (cartItemId) => {
 export const buyCartItem = async (cartItemId) => {
     const res = await axios.put(`${BASE_URL}/buy/${cartItemId}`, {}, getAuthHeaders());
     return res.data;
-};
+}; 

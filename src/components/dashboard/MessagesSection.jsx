@@ -1,3 +1,10 @@
+
+
+
+
+
+
+
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { chatApi } from "../services/chatApi";
 import io from "socket.io-client";
@@ -158,6 +165,7 @@ export default function MessagesSection() {
           name: firstChat.name,
           email: firstChat.email,
           profile_picture_url: firstChat.profile_picture_url
+          
         };
         // Small delay to ensure state is set
         setTimeout(() => {
