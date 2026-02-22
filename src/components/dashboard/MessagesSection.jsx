@@ -9,11 +9,18 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { chatApi } from "../services/chatApi";
 import io from "socket.io-client";
 import { useLocation } from "react-router-dom";
+//shraddha new code
+import CallPage from "../Call/CallPage";//end
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "https://backend-q0wc.onrender.com";
 
 export default function MessagesSection() {
+  //shraddha new code
+  const [callData, setCallData] = useState(null);
+const [showCall, setShowCall] = useState(false);//end
+
+
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -308,14 +315,19 @@ export default function MessagesSection() {
       reconnection: true,
       reconnectionAttempts: 5,
     });
-
     socketRef.current = socket;
 
-    socket.on("connect", () => {
-      console.log(" Socket connected");
-      setSocketConnected(true);
-      socket.emit("join", { userId: currentUserId });
-    });
+socket.on("connect", () => {
+  console.log("Socket connected");
+  setSocketConnected(true);
+
+  if (currentUserId) {
+    socket.emit("register_user", currentUserId.toString());
+    console.log("Registering user:", currentUserId);
+  }
+});
+
+
 
     socket.on("disconnect", () => {
       console.log("❌ Socket disconnected");
@@ -376,13 +388,29 @@ export default function MessagesSection() {
     };
 
     socket.on("new_message", handleIncomingMessage);
+    //shraddha new code
+    // ✅ INCOMING CALL LISTENER ADD HERE
+socket.on("incoming-call", ({ offer, from, callType }) => {
+  console.log("📞 Incoming call from:", from);
+
+  setCallData({
+    offer,
+    from,
+    callType
+  });
+
+  setShowCall(true);
+});
+
+//end
 
     return () => {
       socket.off("new_message", handleIncomingMessage);
       socket.off("new_reaction");
+      socket.off("incoming-call"); //shraddha new code
       socket.disconnect();
     };
-  }, [currentUserId, selectedUser]);
+  }, [currentUserId]);
 
   // Auto-scroll
   useEffect(() => {
@@ -869,6 +897,21 @@ export default function MessagesSection() {
   return (
     <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
       <h2 className="text-2xl font-bold text-gray-800 mb-6">Messages</h2>
+       {/* shraddha new code */}
+{showCall && (
+  <CallPage
+    socket={socketRef.current}
+    currentUserId={currentUserId}
+    targetUserId={callData?.from || selectedUser?.id}
+    incomingOffer={callData?.offer}
+    callType={callData?.callType}
+    onClose={() => {
+      setShowCall(false);
+      setCallData(null);
+    }}
+  />
+)}
+ {/* shraddha new code end */}
 
       {/* PLAN STATUS BANNER - TOP ME ADD KIYA HAI */}
       {!planStatus.loading && (
@@ -1137,6 +1180,14 @@ export default function MessagesSection() {
               {/*  Desktop Header with Profile Picture */}
               <div className="hidden md:flex p-4 border-b border-gray-200 bg-white items-center gap-3">
                 {/*  PROFILE PICTURE WITH FALLBACK */}
+                {/* shraddha new code */}
+                <button
+  onClick={() => setShowCall(true)}
+  className="ml-auto px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+>
+  📞 Call
+</button>
+{/* shraddha new code end */}
                 {selectedUser.profile_picture_url ? (
                   <img 
                     src={selectedUser.profile_picture_url} 

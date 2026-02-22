@@ -4,7 +4,11 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { UserProfileProvider } from "./components/context/UseProfileContext";
 import Header from "./components/home/Header";
 import Footer from "./components/home/Footer";
-
+//shraddha new code
+import { useState, useEffect } from "react";
+import socket from "./components/services/socketService";
+import CallPage from "./components/Call/CallPage";
+//shraddha new code end
 // Import your new AdminDashboard component (the one I just modified)
 // import AdminDashboard from "./components/admin/AdminDashboard";
 import AdminDashboard from "./components/admin/AdminPage";
@@ -87,6 +91,39 @@ const AdminLayout = () => {
 };
 
 export default function App() {
+  //shraddha new code start
+  const [incomingCall, setIncomingCall] = useState(null);
+const [currentUserId, setCurrentUserId] = useState(null);
+useEffect(() => {
+  const storedUser = localStorage.getItem("currentUser");
+  if (storedUser) {
+    const userData = JSON.parse(storedUser);
+    const userId = userData.user_id || userData.id;
+    setCurrentUserId(userId);
+  }
+}, []);
+useEffect(() => {
+  if (!currentUserId) return;
+
+  socket.emit("register_user", currentUserId.toString());
+
+  const handleIncomingCall = ({ offer, from, callType }) => {
+    console.log("📞 Global Incoming Call Received");
+
+    setIncomingCall({
+      offer,
+      from,
+      callType,
+    });
+  };
+
+  socket.on("incoming-call", handleIncomingCall);
+
+  return () => {
+    socket.off("incoming-call", handleIncomingCall);
+  };
+}, [currentUserId]);
+//shraddha code end
   return (
     <UserProfileProvider>
       <Routes>
@@ -474,6 +511,17 @@ export default function App() {
         {/* Fallback Route */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
+      {/*shraddha new code start*/}
+      {incomingCall && (
+  <CallPage
+    socket={socket}
+    currentUserId={currentUserId}
+    targetUserId={incomingCall.from}
+    incomingOffer={incomingCall.offer}
+    callType={incomingCall.callType}
+    onClose={() => setIncomingCall(null)}
+  />
+)} {/*shraddha new code end*/}
       <ToastContainer />
     </UserProfileProvider>
   );
