@@ -126,11 +126,7 @@ useEffect(() => {
   };
 }, [callStatus]);
 
-  const createPeerConnection = () => {
-    peerConnection.current = new RTCPeerConnection({
-  ...configuration,
-  iceTransportPolicy: "relay"
-});
+peerConnection.current = new RTCPeerConnection(configuration);
 
   peerConnection.current.onicecandidate = (event) => {
   if (!event.candidate || !socket) return;
