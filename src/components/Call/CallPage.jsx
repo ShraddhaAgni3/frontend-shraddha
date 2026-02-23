@@ -19,6 +19,7 @@ const [isCameraOff, setIsCameraOff] = useState(false);
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const peerConnection = useRef(null);
+  const pendingCandidates = useRef([]);
 const [callDuration, setCallDuration] = useState(0);
   const [callType, setCallType] = useState("video");
   const [callStatus, setCallStatus] = useState("idle");
@@ -73,17 +74,32 @@ useEffect(() => {
     await peerConnection.current.setRemoteDescription(
       new RTCSessionDescription(answer)
     );
+    // 🔥 Flush queued ICE candidates
+pendingCandidates.current.forEach(async (c) => {
+  await peerConnection.current.addIceCandidate(
+    new RTCIceCandidate(c)
+  );
+});
+pendingCandidates.current = [];
     setCallStatus("connected");
   };
   const handleIce = async (candidate) => {
-    if (!peerConnection.current) return;
+  if (!peerConnection.current) return;
 
-    try {
-      await peerConnection.current.addIceCandidate(
-        new RTCIceCandidate(candidate)
-      );
-    } catch {}
-  };
+  // 🔥 If remote description not set yet, queue candidate
+  if (!peerConnection.current.remoteDescription) {
+    pendingCandidates.current.push(candidate);
+    return;
+  }
+
+  try {
+    await peerConnection.current.addIceCandidate(
+      new RTCIceCandidate(candidate)
+    );
+  } catch (err) {
+    console.log("ICE ADD ERROR:", err);
+  }
+};
 
   const handleEnd = () => {
     cleanupCall();
@@ -143,10 +159,22 @@ const createPeerConnection = () => {
 
   peerConnection.current = new RTCPeerConnection(iceConfig);
 
+  // 🔥 ICE STATE
   peerConnection.current.oniceconnectionstatechange = () => {
     console.log("ICE STATE:", peerConnection.current.iceConnectionState);
   };
 
+  // 🔥 CONNECTION STATE
+  peerConnection.current.onconnectionstatechange = () => {
+    console.log("CONNECTION STATE:", peerConnection.current.connectionState);
+  };
+
+  // 🔥 ICE GATHERING
+  peerConnection.current.onicegatheringstatechange = () => {
+    console.log("ICE GATHERING:", peerConnection.current.iceGatheringState);
+  };
+
+  // 🔥 ICE CANDIDATE
   peerConnection.current.onicecandidate = (event) => {
     if (!event.candidate || !socket) return;
     if (!otherUserRef.current) return;
@@ -157,7 +185,9 @@ const createPeerConnection = () => {
     });
   };
 
+  // 🔥 REMOTE STREAM
   peerConnection.current.ontrack = (event) => {
+    console.log("REMOTE STREAM RECEIVED");
     remoteVideoRef.current.srcObject = event.streams[0];
   };
 };
@@ -172,6 +202,7 @@ const startCall = async (type = "video") => {
   otherUserRef.current = targetUserId;
 
   createPeerConnection();
+  if (!peerConnection.current) return;
 
   const stream = await navigator.mediaDevices.getUserMedia({
     video: type === "video",
@@ -202,62 +233,48 @@ socket.emit("call-user", {
     return;
   }
 
-  setCallStatus("connected");
-    
+  createPeerConnection();
+    if (!peerConnection.current) return;
 
-    createPeerConnection();
+  if (!incomingData?.offer) return;
 
-    if (!incomingData?.offer) return;
+  // 🔥 STEP 1 — Get local media FIRST
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: callType === "video",
+    audio: true
+  });
 
-await peerConnection.current.setRemoteDescription(
-  new RTCSessionDescription(incomingData.offer)
-);
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: callType === "video",
-      audio: true
-    });
-setLocalStream(stream);
-    localVideoRef.current.srcObject = stream;
+  setLocalStream(stream);
+  localVideoRef.current.srcObject = stream;
 
-    stream.getTracks().forEach(track =>
-      peerConnection.current.addTrack(track, stream)
+  stream.getTracks().forEach(track =>
+    peerConnection.current.addTrack(track, stream)
+  );
+
+  // 🔥 STEP 2 — Set remote description
+  await peerConnection.current.setRemoteDescription(
+    new RTCSessionDescription(incomingData.offer)
+  );
+
+  // 🔥 Flush queued ICE candidates
+  pendingCandidates.current.forEach(async (c) => {
+    await peerConnection.current.addIceCandidate(
+      new RTCIceCandidate(c)
     );
+  });
+  pendingCandidates.current = [];
 
-    const answer = await peerConnection.current.createAnswer();
-    await peerConnection.current.setLocalDescription(answer);
+  // 🔥 STEP 3 — Create answer
+  const answer = await peerConnection.current.createAnswer();
+  await peerConnection.current.setLocalDescription(answer);
 
-    socket.emit("answer-call", {
-      to: incomingData.from,
-      answer
-    });
-  };
-const toggleMute = () => {
-  if (!localStream) return;
-
-  localStream.getAudioTracks().forEach(track => {
-    track.enabled = !track.enabled;
+  socket.emit("answer-call", {
+    to: incomingData.from,
+    answer
   });
 
-  setIsMuted(prev => !prev);
+  setCallStatus("connected");
 };
-const toggleCamera = () => {
-  if (!localStream) return;
-
-  localStream.getVideoTracks().forEach(track => {
-    track.enabled = !track.enabled;
-  });
-
-  setIsCameraOff(prev => !prev);
-};
-  const rejectCall = () => {
-  if (otherUserRef.current) {
-    socket.emit("end-call", { to: otherUserRef.current.toString() });
-  }
-
-  cleanupCall();
-  onClose();
-};
-
   const cleanupCall = () => {
     if (peerConnection.current) {
       peerConnection.current.close();
