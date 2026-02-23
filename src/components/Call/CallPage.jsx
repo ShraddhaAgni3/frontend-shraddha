@@ -1,33 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 
 import CallUI from "./CallUI";
-
 const configuration = {
   iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
     {
-      urls: "stun:stun.relay.metered.ca:80",
-    },
-    {
-      urls: "turn:global.relay.metered.ca:80",
+      urls: [
+        "turn:global.relay.metered.ca:80",
+        "turn:global.relay.metered.ca:443",
+        "turns:global.relay.metered.ca:443?transport=tcp"
+      ],
       username: "a276c28a894e22e6e9b400c1",
-      credential: "QlDSTWza3xkHHWZe",
-    },
-    {
-      urls: "turn:global.relay.metered.ca:80?transport=tcp",
-      username: "a276c28a894e22e6e9b400c1",
-      credential: "QlDSTWza3xkHHWZe",
-    },
-    {
-      urls: "turn:global.relay.metered.ca:443",
-      username: "a276c28a894e22e6e9b400c1",
-      credential: "QlDSTWza3xkHHWZe",
-    },
-    {
-      urls: "turns:global.relay.metered.ca:443?transport=tcp",
-      username: "a276c28a894e22e6e9b400c1",
-      credential: "QlDSTWza3xkHHWZe",
-    },
-  ],
+      credential: "QlDSTWza3xkHHWZe"
+    }
+  ]
 };
 export default function VideoCall({ 
   socket, 
