@@ -2,9 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import CallUI from "./CallUI";
 
-const configuration = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-};
+
 export default function VideoCall({ 
   socket, 
   currentUserId, 
@@ -27,7 +25,7 @@ const [callDuration, setCallDuration] = useState(0);
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-
+const [iceConfig, setIceConfig] = useState(null);
     return `${mins.toString().padStart(2, "0")}:${secs
       .toString()
       .padStart(2, "0")}`;
@@ -101,7 +99,28 @@ useEffect(() => {
     socket.off("call-ended", handleEnd);
   };
 }, [socket]);
+useEffect(() => {
+  const fetchTurnServers = async () => {
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/api/turn-credentials`
+      );
 
+      const data = await res.json();
+
+      console.log("🔥 TURN SERVERS:", data);
+
+      setIceConfig({
+        iceServers: data.iceServers
+      });
+
+    } catch (error) {
+      console.error("TURN fetch error:", error);
+    }
+  };
+
+  fetchTurnServers();
+}, []);
 useEffect(() => {
   let interval;
 
@@ -116,15 +135,15 @@ useEffect(() => {
   };
 }, [callStatus]);
 const createPeerConnection = () => {
-  peerConnection.current = new RTCPeerConnection(configuration);
+  if (!iceConfig) {
+    console.log("ICE not loaded yet");
+    return;
+  }
 
-  // 🔍 ICE STATE LOG
+  peerConnection.current = new RTCPeerConnection(iceConfig);
+
   peerConnection.current.oniceconnectionstatechange = () => {
     console.log("ICE STATE:", peerConnection.current.iceConnectionState);
-  };
-
-  peerConnection.current.onicecandidateerror = (e) => {
-    console.log("ICE ERROR:", e);
   };
 
   peerConnection.current.onicecandidate = (event) => {
@@ -140,11 +159,17 @@ const createPeerConnection = () => {
   peerConnection.current.ontrack = (event) => {
     remoteVideoRef.current.srcObject = event.streams[0];
   };
-};;
+};
 const startCall = async (type = "video") => {
+  if (!iceConfig) {
+    alert("Connection not ready yet");
+    return;
+  }
+
   setCallType(type);
   setCallStatus("calling");
-otherUserRef.current = targetUserId;
+  otherUserRef.current = targetUserId;
+
   createPeerConnection();
 
   const stream = await navigator.mediaDevices.getUserMedia({
