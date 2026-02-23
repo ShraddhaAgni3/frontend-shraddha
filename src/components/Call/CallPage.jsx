@@ -5,11 +5,7 @@ const configuration = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
     {
-      urls: [
-        "turn:global.relay.metered.ca:80",
-        "turn:global.relay.metered.ca:443",
-        "turns:global.relay.metered.ca:443?transport=tcp"
-      ],
+      urls: "turn:global.relay.metered.ca:80?transport=udp",
       username: "a276c28a894e22e6e9b400c1",
       credential: "QlDSTWza3xkHHWZe"
     }
