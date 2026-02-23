@@ -115,27 +115,32 @@ useEffect(() => {
     clearInterval(interval);
   };
 }, [callStatus]);
+const createPeerConnection = () => {
+  peerConnection.current = new RTCPeerConnection(configuration);
 
-  const createPeerConnection = () => {
-    peerConnection.current = new RTCPeerConnection(configuration);
+  // 🔍 ICE STATE LOG
+  peerConnection.current.oniceconnectionstatechange = () => {
+    console.log("ICE STATE:", peerConnection.current.iceConnectionState);
+  };
+
+  peerConnection.current.onicecandidateerror = (e) => {
+    console.log("ICE ERROR:", e);
+  };
 
   peerConnection.current.onicecandidate = (event) => {
-  if (!event.candidate || !socket) return;
+    if (!event.candidate || !socket) return;
+    if (!otherUserRef.current) return;
 
-  if (!otherUserRef.current) {
-    console.log("❌ ICE skipped — no target user");
-    return;
-  }
-
-  socket.emit("ice-candidate", {
-    to: otherUserRef.current.toString(),
-    candidate: event.candidate
-  });
-};
-    peerConnection.current.ontrack = (event) => {
-      remoteVideoRef.current.srcObject = event.streams[0];
-    };
+    socket.emit("ice-candidate", {
+      to: otherUserRef.current.toString(),
+      candidate: event.candidate
+    });
   };
+
+  peerConnection.current.ontrack = (event) => {
+    remoteVideoRef.current.srcObject = event.streams[0];
+  };
+};;
 const startCall = async (type = "video") => {
   setCallType(type);
   setCallStatus("calling");
