@@ -1,15 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import CallUI from "./CallUI";
+
 const configuration = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    {
-      urls: "turn:global.relay.metered.ca:80?transport=udp",
-      username: "a276c28a894e22e6e9b400c1",
-      credential: "QlDSTWza3xkHHWZe"
-    }
-  ]
+  iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
 };
 export default function VideoCall({ 
   socket, 
@@ -122,14 +116,8 @@ useEffect(() => {
   };
 }, [callStatus]);
 
-peerConnection.current = new RTCPeerConnection(configuration);
-  peerConnection.current.oniceconnectionstatechange = () => {
-    console.log("ICE STATE:", peerConnection.current.iceConnectionState);
-  };
-
-  peerConnection.current.onicecandidateerror = (e) => {
-    console.log("ICE ERROR:", e);
-  };
+  const createPeerConnection = () => {
+    peerConnection.current = new RTCPeerConnection(configuration);
 
   peerConnection.current.onicecandidate = (event) => {
   if (!event.candidate || !socket) return;
