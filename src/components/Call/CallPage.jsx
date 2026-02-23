@@ -127,6 +127,13 @@ useEffect(() => {
 }, [callStatus]);
 
 peerConnection.current = new RTCPeerConnection(configuration);
+  peerConnection.current.oniceconnectionstatechange = () => {
+    console.log("ICE STATE:", peerConnection.current.iceConnectionState);
+  };
+
+  peerConnection.current.onicecandidateerror = (e) => {
+    console.log("ICE ERROR:", e);
+  };
 
   peerConnection.current.onicecandidate = (event) => {
   if (!event.candidate || !socket) return;
