@@ -299,7 +299,16 @@ socket.emit("call-user", {
   cleanupCall();
   onClose();
 };
+const rejectCall = () => {
+  if (otherUserRef.current) {
+    socket.emit("end-call", {
+      to: otherUserRef.current.toString()
+    });
+  }
 
+  cleanupCall();
+  onClose();
+};
 
   return (
     <CallUI
