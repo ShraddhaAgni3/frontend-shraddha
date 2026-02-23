@@ -196,7 +196,14 @@ socket.emit("call-user", {
   });
 };
   const acceptCall = async () => {
-    setCallStatus("connected");
+
+  if (!iceConfig) {
+    alert("Connection not ready yet");
+    return;
+  }
+
+  setCallStatus("connected");
+    
 
     createPeerConnection();
 
