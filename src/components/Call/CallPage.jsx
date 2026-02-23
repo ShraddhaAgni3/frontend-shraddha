@@ -160,7 +160,10 @@ const createPeerConnection = () => {
     return;
   }
 
-  peerConnection.current = new RTCPeerConnection(iceConfig);
+  peerConnection.current = new RTCPeerConnection({
+  ...iceConfig,
+  iceTransportPolicy: "relay"
+});
 
   // ICE STATE
   peerConnection.current.oniceconnectionstatechange = () => {
