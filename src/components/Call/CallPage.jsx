@@ -309,6 +309,25 @@ const rejectCall = () => {
   cleanupCall();
   onClose();
 };
+  const toggleMute = () => {
+  if (!localStream) return;
+
+  localStream.getAudioTracks().forEach(track => {
+    track.enabled = !track.enabled;
+  });
+
+  setIsMuted(prev => !prev);
+};
+
+const toggleCamera = () => {
+  if (!localStream) return;
+
+  localStream.getVideoTracks().forEach(track => {
+    track.enabled = !track.enabled;
+  });
+
+  setIsCameraOff(prev => !prev);
+};
 
   return (
     <CallUI
