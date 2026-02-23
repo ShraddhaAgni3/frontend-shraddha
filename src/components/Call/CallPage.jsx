@@ -4,13 +4,30 @@ import CallUI from "./CallUI";
 
 const configuration = {
   iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
     {
-      urls: "turn:openrelay.metered.ca:80",
-      username: "openrelayproject",
-      credential: "openrelayproject"
-    }
-  ]
+      urls: "stun:stun.relay.metered.ca:80",
+    },
+    {
+      urls: "turn:global.relay.metered.ca:80",
+      username: "a276c28a894e22e6e9b400c1",
+      credential: "QlDSTWza3xkHHWZe",
+    },
+    {
+      urls: "turn:global.relay.metered.ca:80?transport=tcp",
+      username: "a276c28a894e22e6e9b400c1",
+      credential: "QlDSTWza3xkHHWZe",
+    },
+    {
+      urls: "turn:global.relay.metered.ca:443",
+      username: "a276c28a894e22e6e9b400c1",
+      credential: "QlDSTWza3xkHHWZe",
+    },
+    {
+      urls: "turns:global.relay.metered.ca:443?transport=tcp",
+      username: "a276c28a894e22e6e9b400c1",
+      credential: "QlDSTWza3xkHHWZe",
+    },
+  ],
 };
 export default function VideoCall({ 
   socket, 
