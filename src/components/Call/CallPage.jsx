@@ -12,6 +12,7 @@ export default function VideoCall({
   onClose 
 }){
   const otherUserRef = useRef(null);
+  const [iceConfig, setIceConfig] = useState(null);
   const [localStream, setLocalStream] = useState(null);
 const [isMuted, setIsMuted] = useState(false);
 const [isCameraOff, setIsCameraOff] = useState(false);
@@ -25,7 +26,7 @@ const [callDuration, setCallDuration] = useState(0);
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-const [iceConfig, setIceConfig] = useState(null);
+
     return `${mins.toString().padStart(2, "0")}:${secs
       .toString()
       .padStart(2, "0")}`;
