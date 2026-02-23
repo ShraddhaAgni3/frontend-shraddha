@@ -1,13 +1,26 @@
 
+
+
+
+
+
+
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { chatApi } from "../services/chatApi";
 import io from "socket.io-client";
 import { useLocation } from "react-router-dom";
+//shraddha new code
+import CallPage from "../Call/CallPage";//end
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "https://backend-q0wc.onrender.com";
 
 export default function MessagesSection() {
+  //shraddha new code
+  const [callData, setCallData] = useState(null);
+const [showCall, setShowCall] = useState(false);//end
+
+
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -26,7 +39,7 @@ export default function MessagesSection() {
   const [deletingMessageId, setDeletingMessageId] = useState(null);
   const [messageLimitReached, setMessageLimitReached] = useState(false);
   
-  // ✅ PROFILE PICTURES STATES ADD KIYE
+  //  PROFILE PICTURES STATES
   const [userProfilePictures, setUserProfilePictures] = useState({});
   const [profilePicturesLoaded, setProfilePicturesLoaded] = useState(false);
   
@@ -34,7 +47,7 @@ export default function MessagesSection() {
   const [selectedImage, setSelectedImage] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
 
-  //  yeh plant states add kra
+  // plant states
   const [planStatus, setPlanStatus] = useState({
     loading: true,
     active: false,
@@ -58,7 +71,7 @@ export default function MessagesSection() {
     }
   }, []);
 
-  // ✅ PROFILE PICTURES FETCH - EK HI BAAR
+  //  IMPROVED PROFILE PICTURES FETCH
   useEffect(() => {
     const fetchAllProfilePictures = async () => {
       if (!currentUserId || profilePicturesLoaded) return;
@@ -72,18 +85,20 @@ export default function MessagesSection() {
           
           response.data.forEach(user => {
             if (user.id && user.id !== currentUserId) {
-              // Check all possible image fields
+              //  Check all possible image fields with priority
               pictures[user.id] = 
+                user.profile_picture_url || 
+                user.profile_picture ||
                 user.image_url || 
                 user.profile_image || 
-                user.profile_picture || 
                 user.avatar_url ||
                 user.avatar ||
-                user.photo_url;
+                user.photo_url ||
+                null;
             }
           });
           
-          console.log(`✅ ${Object.keys(pictures).length} profile pictures loaded`);
+          console.log(`${Object.keys(pictures).length} profile pictures loaded`);
           setUserProfilePictures(pictures);
           setProfilePicturesLoaded(true);
           
@@ -107,7 +122,7 @@ export default function MessagesSection() {
         if (Date.now() - timestamp < 24 * 60 * 60 * 1000) {
           setUserProfilePictures(data);
           setProfilePicturesLoaded(true);
-          console.log("✅ Using cached profile pictures");
+          console.log("Using cached profile pictures");
           return;
         }
       } catch (e) {
@@ -118,7 +133,7 @@ export default function MessagesSection() {
     fetchAllProfilePictures();
   }, [currentUserId, profilePicturesLoaded]);
 
-  //  CORRECT
+  // CORRECT
   useEffect(() => {
     if (location.state?.selectedUser) {
       console.log(
@@ -142,20 +157,22 @@ export default function MessagesSection() {
     }
   }, [location.state, currentUserId]);
 
-  //  Fetch recent chats
+  // Fetch recent chats
   const fetchRecentChats = async () => {
     try {
       setRecentChatsLoading(true);
       const response = await chatApi.getRecentChats(currentUserId);
       setRecentChats(response.data);
 
-      //  AUTO-SELECT FIRST RECENT CHAT IF NO USER IS SELECTED
+      // AUTO-SELECT FIRST RECENT CHAT IF NO USER IS SELECTED
       if (response.data && response.data.length > 0 && !selectedUser) {
         const firstChat = response.data[0];
         const user = {
           id: firstChat.user_id,
           name: firstChat.name,
           email: firstChat.email,
+          profile_picture_url: firstChat.profile_picture_url
+          
         };
         // Small delay to ensure state is set
         setTimeout(() => {
@@ -169,12 +186,13 @@ export default function MessagesSection() {
     }
   };
 
-  //  Handle recent chat selection
+  // Handle recent chat selection
   const handleRecentChatSelect = (chat) => {
     const user = {
       id: chat.user_id,
       name: chat.name,
       email: chat.email,
+      profile_picture_url: chat.profile_picture_url 
     };
     handleUserSelect(user);
     setShowSidebar(false);
@@ -190,14 +208,14 @@ export default function MessagesSection() {
     return formatted || name;
   };
 
-  //  RECENT CHATS USE EFFECT
+  // RECENT CHATS USE EFFECT
   useEffect(() => {
     if (currentUserId) {
       fetchRecentChats();
     }
   }, [currentUserId]);
 
-  //  Click outside to close reaction picker and delete option
+  // Click outside to close reaction picker and delete option
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -220,7 +238,7 @@ export default function MessagesSection() {
     return () => document.removeEventListener("click", handleClickOutside);
   }, [showReactionPicker, showDeleteOption]);
 
-  //  Get current user once
+  // Get current user once
   useEffect(() => {
     try {
       const storedUser = localStorage.getItem("currentUser");
@@ -238,7 +256,7 @@ export default function MessagesSection() {
     }
   }, []);
 
-  //  PLAN STATUS FETCH USEEFFECT
+  // PLAN STATUS FETCH USEEFFECT
   useEffect(() => {
     const fetchPlanStatus = async () => {
       try {
@@ -261,7 +279,7 @@ export default function MessagesSection() {
     if (currentUserId) fetchPlanStatus();
   }, [currentUserId]);
 
-  //  Image Modal Effects
+  // Image Modal Effects
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === "Escape") {
@@ -282,7 +300,7 @@ export default function MessagesSection() {
     };
   }, [showImageModal]);
 
-  //  SOCKET WITH REACTION HANDLING
+  // SOCKET WITH REACTION HANDLING
   useEffect(() => {
     if (!currentUserId) return;
 
@@ -297,21 +315,26 @@ export default function MessagesSection() {
       reconnection: true,
       reconnectionAttempts: 5,
     });
-
     socketRef.current = socket;
 
-    socket.on("connect", () => {
-      console.log(" Socket connected");
-      setSocketConnected(true);
-      socket.emit("join", { userId: currentUserId });
-    });
+socket.on("connect", () => {
+  console.log("Socket connected");
+  setSocketConnected(true);
+
+  if (currentUserId) {
+    socket.emit("register_user", currentUserId.toString());
+    console.log("Registering user:", currentUserId);
+  }
+});
+
+
 
     socket.on("disconnect", () => {
       console.log("❌ Socket disconnected");
       setSocketConnected(false);
     });
 
-    //  HANDLE NEW REACTIONS VIA SOCKET
+    // HANDLE NEW REACTIONS VIA SOCKET
     socket.on("new_reaction", (reactionData) => {
       console.log(" New reaction received via socket:", reactionData);
       if (reactionData && selectedUser) {
@@ -335,7 +358,7 @@ export default function MessagesSection() {
       }
     });
 
-    //  Handle incoming messages
+    // Handle incoming messages
     const handleIncomingMessage = (message) => {
       console.log("📩 Socket message received:", message);
       fetchRecentChats();
@@ -365,29 +388,45 @@ export default function MessagesSection() {
     };
 
     socket.on("new_message", handleIncomingMessage);
+    //shraddha new code
+    // ✅ INCOMING CALL LISTENER ADD HERE
+socket.on("incoming-call", ({ offer, from, callType }) => {
+  console.log("📞 Incoming call from:", from);
+
+  setCallData({
+    offer,
+    from,
+    callType
+  });
+
+  setShowCall(true);
+});
+
+//end
 
     return () => {
       socket.off("new_message", handleIncomingMessage);
       socket.off("new_reaction");
+      socket.off("incoming-call"); //shraddha new code
       socket.disconnect();
     };
-  }, [currentUserId, selectedUser]);
+  }, [currentUserId]);
 
-  //  Auto-scroll
+  // Auto-scroll
   useEffect(() => {
     if (messagesEndRef.current && messages.length > 0) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
 
-  //   FUNCTION TO REMOVE NUMBERS FROM USERNAME
+  // FUNCTION TO REMOVE NUMBERS FROM USERNAME
   const cleanUserName = (name) => {
     if (!name) return "User";
     // Remove numbers from the end of the username
     return name.replace(/\d+$/, "").trim() || name;
   }; 
 
-  //  Search users
+  // Search users
   const searchUsers = useCallback(
     async (query) => {
       if (!query.trim() || !currentUserId) return;
@@ -413,7 +452,7 @@ export default function MessagesSection() {
     [currentUserId],
   );
 
-  //  LOAD MESSAGES
+  // LOAD MESSAGES
   const loadMessages = async (otherUserId) => {
     if (!currentUserId) return;
     try {
@@ -454,7 +493,7 @@ export default function MessagesSection() {
     }
   };
 
-  //  LOAD REACTIONS PROPERLY
+  // LOAD REACTIONS PROPERLY
   const loadReactions = async (userId) => {
     if (!currentUserId || !userId) return;
     try {
@@ -481,7 +520,7 @@ export default function MessagesSection() {
     }
   };
 
-  //  SELECT USER - WITH MOBILE SUPPORT
+  // SELECT USER - WITH MOBILE SUPPORT
   const handleUserSelect = async (user) => {
     if (!currentUserId) return;
 
@@ -490,6 +529,7 @@ export default function MessagesSection() {
       id: user.id,
       name: cleanUserName(user.name || user.email?.split("@")[0] || "User"),
       email: user.email,
+      profile_picture_url: user.profile_picture_url 
     };
 
     setSelectedUser(selectedUserData);
@@ -502,7 +542,7 @@ export default function MessagesSection() {
     await loadReactions(user.id);
   };
 
-  //  DELETE MESSAGE FUNCTION
+  // DELETE MESSAGE FUNCTION
   const handleDeleteMessage = async (messageId) => {
     if (!messageId || !currentUserId) {
       console.error("❌ Cannot delete: missing message ID or user ID");
@@ -541,7 +581,7 @@ export default function MessagesSection() {
     }
   };
 
-  //  SEND MESSAGE
+  // SEND MESSAGE
   const handleSendMessage = async () => {
     // phale status check karega yha pr
     if (!planStatus.active) {
@@ -606,7 +646,7 @@ export default function MessagesSection() {
       console.error("❌ Send failed:", error);
       setMessages((prev) => prev.filter((msg) => msg.id !== tempMsg.id));
 
-      // ✅ ADDED: message limit handling
+      //  ADDED: message limit handling
       if (
         error.response?.status === 403 &&
         error.response?.data?.code === "MESSAGE_LIMIT_EXCEEDED"
@@ -621,7 +661,7 @@ export default function MessagesSection() {
     }
   };
 
-  //  ADD REACTION - PROPER REAL-TIME HANDLING
+  // ADD REACTION - PROPER REAL-TIME HANDLING
   const addReaction = async (messageId, emoji) => {
     // 🔒 PLAN EXPIRED
     if (!planStatus.active) {
@@ -669,7 +709,7 @@ export default function MessagesSection() {
     }
   };
 
-  //  GET REACTIONS FOR MESSAGE - SIMPLE AND WORKING
+  // GET REACTIONS FOR MESSAGE - SIMPLE AND WORKING
   const getMessageReactions = (messageId) => {
     if (!messageId) return [];
 
@@ -682,14 +722,14 @@ export default function MessagesSection() {
     return messageReactions;
   };
 
-  //  RECONNECT SOCKET
+  // RECONNECT SOCKET
   const reconnectSocket = () => {
     if (socketRef.current) {
       socketRef.current.connect();
     }
   };
 
-  //  FILE UPLOAD
+  // FILE UPLOAD
   const handleFileUpload = async (file) => {
     // 🔒 PLAN EXPIRED
     if (!planStatus.active) {
@@ -749,7 +789,7 @@ export default function MessagesSection() {
     e.target.value = "";
   };
 
-  //  SEARCH EFFECT
+  // SEARCH EFFECT
   useEffect(() => {
     if (searchTerm.trim() && currentUserId) {
       const timeoutId = setTimeout(() => {
@@ -761,7 +801,7 @@ export default function MessagesSection() {
     }
   }, [searchTerm, searchUsers, currentUserId]);
 
-  //  ENTER KEY HANDLING
+  // ENTER KEY HANDLING
   const handleKeyPress = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -769,7 +809,7 @@ export default function MessagesSection() {
     }
   };
 
-  //  FORMAT TIME
+  // FORMAT TIME
   const formatTime = (timestamp) => {
     if (!timestamp) return "";
     return new Date(timestamp).toLocaleTimeString("en-US", {
@@ -779,7 +819,7 @@ export default function MessagesSection() {
     });
   };
 
-  //  RENDER ATTACHMENT
+  // RENDER ATTACHMENT
   const renderAttachment = (message) => {
     if (!message.attachment_url) return null;
 
@@ -824,7 +864,7 @@ export default function MessagesSection() {
     );
   };
 
-  // ✅ SIMPLE FUNCTION FOR GRADIENT COLOR
+  //  SIMPLE FUNCTION FOR GRADIENT COLOR
   const getGradientColor = (name) => {
     const nameChar = name?.charAt(0) || 'U';
     const colors = [
@@ -857,8 +897,23 @@ export default function MessagesSection() {
   return (
     <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
       <h2 className="text-2xl font-bold text-gray-800 mb-6">Messages</h2>
+       {/* shraddha new code */}
+{showCall && (
+  <CallPage
+    socket={socketRef.current}
+    currentUserId={currentUserId}
+    targetUserId={callData?.from || selectedUser?.id}
+    incomingOffer={callData?.offer}
+    callType={callData?.callType}
+    onClose={() => {
+      setShowCall(false);
+      setCallData(null);
+    }}
+  />
+)}
+ {/* shraddha new code end */}
 
-      {/*  PLAN STATUS BANNER - TOP ME ADD KIYA HAI */}
+      {/* PLAN STATUS BANNER - TOP ME ADD KIYA HAI */}
       {!planStatus.loading && (
         <div
           className={`mb-4 p-3 text-sm text-center rounded-lg border ${
@@ -880,9 +935,9 @@ export default function MessagesSection() {
         </div>
       )}
 
-      {/*  RESPONSIVE CHAT CONTAINER - HEIGHT REDUCED */}
+      {/* RESPONSIVE CHAT CONTAINER - HEIGHT REDUCED */}
       <div className="bg-white rounded-2xl shadow-lg h-[55vh] sm:h-[500px] flex flex-col md:flex-row border border-gray-200 relative">
-        {/* ✅ MOBILE HEADER FOR CHAT */}
+        {/*  MOBILE HEADER FOR CHAT */}
         {selectedUser && !showSidebar && (
           <div className="md:hidden p-4 border-b border-gray-200 bg-white flex items-center gap-3">
             <button
@@ -891,18 +946,37 @@ export default function MessagesSection() {
             >
               ← Back
             </button>
-            {/* ✅ PROFILE PICTURE ADDED */}
-            {userProfilePictures[selectedUser.id] ? (
+            {/*  PROFILE PICTURE WITH FALLBACK */}
+            {selectedUser.profile_picture_url ? (
+              <img 
+                src={selectedUser.profile_picture_url} 
+                alt={selectedUser.name}
+                className="w-8 h-8 rounded-full object-cover border-2 border-white shadow"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.parentElement.querySelector('.mobile-fallback-avatar').style.display = 'flex';
+                }}
+              />
+            ) : userProfilePictures[selectedUser.id] ? (
               <img 
                 src={userProfilePictures[selectedUser.id]} 
                 alt={selectedUser.name}
                 className="w-8 h-8 rounded-full object-cover border-2 border-white shadow"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.parentElement.querySelector('.mobile-fallback-avatar').style.display = 'flex';
+                }}
               />
-            ) : (
-              <div className={`w-8 h-8 ${getGradientColor(selectedUser.name)} rounded-lg flex items-center justify-center text-white font-bold text-sm`}>
-                {selectedUser.name?.charAt(0)?.toUpperCase() || "U"}
-              </div>
-            )}
+            ) : null}
+            
+            <div 
+              className={`mobile-fallback-avatar w-8 h-8 ${getGradientColor(selectedUser.name)} rounded-full flex items-center justify-center text-white font-bold text-sm ${
+                (selectedUser.profile_picture_url || userProfilePictures[selectedUser.id]) ? 'hidden' : 'flex'
+              }`}
+            >
+              {selectedUser.name?.charAt(0)?.toUpperCase() || "U"}
+            </div>
+            
             <div>
               <p className="font-medium text-gray-800 text-sm">
                 {selectedUser.name}
@@ -912,7 +986,7 @@ export default function MessagesSection() {
           </div>
         )}
 
-        {/*  SIDEBAR - Responsive */}
+        {/* SIDEBAR - Responsive */}
         <div
           className={`
           ${showSidebar ? "flex" : "hidden"} 
@@ -944,7 +1018,7 @@ export default function MessagesSection() {
             </div>
           </div>
 
-          {/*  RECENT CHATS SECTION - RESPONSIVE */}
+          {/* RECENT CHATS SECTION - RESPONSIVE */}
           <div className="border-b border-gray-200">
             <div className="px-4 py-3 bg-gray-50">
               <h3 className="text-sm font-medium text-gray-700">
@@ -973,18 +1047,37 @@ export default function MessagesSection() {
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      {/* ✅ PROFILE PICTURE ADDED */}
-                      {userProfilePictures[chat.user_id] ? (
+                      {/* ✅ PROFILE PICTURE WITH FALLBACK */}
+                      {chat.profile_picture_url ? (
+                        <img 
+                          src={chat.profile_picture_url} 
+                          alt={chat.name}
+                          className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.parentElement.querySelector('.chat-fallback-avatar').style.display = 'flex';
+                          }}
+                        />
+                      ) : userProfilePictures[chat.user_id] ? (
                         <img 
                           src={userProfilePictures[chat.user_id]} 
                           alt={chat.name}
-                          className="w-8 h-8 rounded-full object-cover border border-gray-200"
+                          className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.parentElement.querySelector('.chat-fallback-avatar').style.display = 'flex';
+                          }}
                         />
-                      ) : (
-                        <div className={`w-8 h-8 ${getGradientColor(chat.name)} rounded-lg flex items-center justify-center text-white font-bold text-xs`}>
-                          {cleanUserName(chat.name)?.charAt(0)?.toUpperCase() || "U"}
-                        </div>
-                      )}
+                      ) : null}
+                      
+                      <div 
+                        className={`chat-fallback-avatar w-10 h-10 ${getGradientColor(chat.name)} rounded-full flex items-center justify-center text-white font-bold text-sm ${
+                          (chat.profile_picture_url || userProfilePictures[chat.user_id]) ? 'hidden' : 'flex'
+                        }`}
+                      >
+                        {cleanUserName(chat.name)?.charAt(0)?.toUpperCase() || "U"}
+                      </div>
+                      
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-center">
                           <p className="font-medium text-gray-800 truncate text-sm">
@@ -1037,20 +1130,39 @@ export default function MessagesSection() {
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    {/* ✅ PROFILE PICTURE ADDED */}
-                    {userProfilePictures[user.id] ? (
+                    {/*  PROFILE PICTURE WITH FALLBACK */}
+                    {user.profile_picture_url ? (
+                      <img 
+                        src={user.profile_picture_url} 
+                        alt={user.name}
+                        className="w-12 h-12 rounded-full object-cover border-2 border-white shadow"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.parentElement.querySelector('.user-fallback-avatar').style.display = 'flex';
+                        }}
+                      />
+                    ) : userProfilePictures[user.id] ? (
                       <img 
                         src={userProfilePictures[user.id]} 
                         alt={user.name}
-                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-white shadow-sm"
+                        className="w-12 h-12 rounded-full object-cover border-2 border-white shadow"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.parentElement.querySelector('.user-fallback-avatar').style.display = 'flex';
+                        }}
                       />
-                    ) : (
-                      <div className={`w-10 h-10 sm:w-12 sm:h-12 ${getGradientColor(user.name)} rounded-xl flex items-center justify-center text-white font-bold text-sm sm:text-base`}>
-                        {user.name?.charAt(0)?.toUpperCase() || "U"}
-                      </div>
-                    )}
+                    ) : null}
+                    
+                    <div 
+                      className={`user-fallback-avatar w-12 h-12 ${getGradientColor(user.name)} rounded-full flex items-center justify-center text-white font-bold ${
+                        (user.profile_picture_url || userProfilePictures[user.id]) ? 'hidden' : 'flex'
+                      }`}
+                    >
+                      {user.name?.charAt(0)?.toUpperCase() || "U"}
+                    </div>
+                    
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-800 truncate text-sm sm:text-base">
+                      <p className="font-medium text-gray-800 truncate">
                         {user.name}
                       </p>
                     </div>
@@ -1061,30 +1173,55 @@ export default function MessagesSection() {
           </div>
         </div>
 
-        {/*  CHAT AREA - Responsive with reduced height */}
+        {/* CHAT AREA - Responsive with reduced height */}
         <div className="flex-1 flex flex-col">
           {selectedUser ? (
             <>
-              {/* ✅ Desktop Header with Profile Picture */}
-              <div className="hidden md:flex p-4 border-b border-gray-200 bg-white">
-                <div className="flex items-center gap-3">
-                  {/* ✅ PROFILE PICTURE ADDED */}
-                  {userProfilePictures[selectedUser.id] ? (
-                    <img 
-                      src={userProfilePictures[selectedUser.id]} 
-                      alt={selectedUser.name}
-                      className="w-10 h-10 rounded-full object-cover border-2 border-white shadow"
-                    />
-                  ) : (
-                    <div className={`w-10 h-10 ${getGradientColor(selectedUser.name)} rounded-xl flex items-center justify-center text-white font-bold`}>
-                      {selectedUser.name?.charAt(0)?.toUpperCase() || "U"}
-                    </div>
-                  )}
-                  <div>
-                    <p className="font-medium text-gray-800">
-                      {selectedUser.name}
-                    </p>
-                  </div>
+              {/*  Desktop Header with Profile Picture */}
+              <div className="hidden md:flex p-4 border-b border-gray-200 bg-white items-center gap-3">
+                {/*  PROFILE PICTURE WITH FALLBACK */}
+                {/* shraddha new code */}
+                <button
+  onClick={() => setShowCall(true)}
+  className="ml-auto px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+>
+  📞 Call
+</button>
+{/* shraddha new code end */}
+                {selectedUser.profile_picture_url ? (
+                  <img 
+                    src={selectedUser.profile_picture_url} 
+                    alt={selectedUser.name}
+                    className="w-10 h-10 rounded-full object-cover border-2 border-white shadow"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.querySelector('.desktop-fallback-avatar').style.display = 'flex';
+                    }}
+                  />
+                ) : userProfilePictures[selectedUser.id] ? (
+                  <img 
+                    src={userProfilePictures[selectedUser.id]} 
+                    alt={selectedUser.name}
+                    className="w-10 h-10 rounded-full object-cover border-2 border-white shadow"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.querySelector('.desktop-fallback-avatar').style.display = 'flex';
+                    }}
+                  />
+                ) : null}
+                
+                <div 
+                  className={`desktop-fallback-avatar w-10 h-10 ${getGradientColor(selectedUser.name)} rounded-full flex items-center justify-center text-white font-bold ${
+                    (selectedUser.profile_picture_url || userProfilePictures[selectedUser.id]) ? 'hidden' : 'flex'
+                  }`}
+                >
+                  {selectedUser.name?.charAt(0)?.toUpperCase() || "U"}
+                </div>
+                
+                <div>
+                  <p className="font-medium text-gray-800">
+                    {selectedUser.name}
+                  </p>
                 </div>
               </div>
 
@@ -1221,7 +1358,7 @@ export default function MessagesSection() {
                               😊
                             </button>
                           </div>
-                          {/*  REACTIONS DISPLAY */}
+                          {/* REACTIONS DISPLAY */}
                           <div className="flex flex-wrap gap-1 mt-2">
                             {getMessageReactions(message.id).map(
                               (reaction, index) => (
@@ -1392,6 +1529,19 @@ export default function MessagesSection() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
