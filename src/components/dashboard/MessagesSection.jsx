@@ -311,7 +311,7 @@ const [showCall, setShowCall] = useState(false);//end
     }
 
     const socket = io(API_BASE_URL, {
-      transports: ["websocket", "polling"],
+      transports: ["websocket"],
       reconnection: true,
       reconnectionAttempts: 5,
     });
