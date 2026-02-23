@@ -33,6 +33,9 @@ const [callDuration, setCallDuration] = useState(0);
       .padStart(2, "0")}`;
   };
   useEffect(() => {
+  console.log("CALL TYPE:", callType);
+}, [callType]);
+  useEffect(() => {
   let timeout;
 
   if (callStatus === "calling") {
@@ -159,22 +162,22 @@ const createPeerConnection = () => {
 
   peerConnection.current = new RTCPeerConnection(iceConfig);
 
-  // 🔥 ICE STATE
+  // ICE STATE
   peerConnection.current.oniceconnectionstatechange = () => {
     console.log("ICE STATE:", peerConnection.current.iceConnectionState);
   };
 
-  // 🔥 CONNECTION STATE
+  // CONNECTION STATE
   peerConnection.current.onconnectionstatechange = () => {
     console.log("CONNECTION STATE:", peerConnection.current.connectionState);
   };
 
-  // 🔥 ICE GATHERING
+  // ICE GATHERING
   peerConnection.current.onicegatheringstatechange = () => {
     console.log("ICE GATHERING:", peerConnection.current.iceGatheringState);
   };
 
-  // 🔥 ICE CANDIDATE
+  // ICE CANDIDATE
   peerConnection.current.onicecandidate = (event) => {
     if (!event.candidate || !socket) return;
     if (!otherUserRef.current) return;
@@ -185,10 +188,21 @@ const createPeerConnection = () => {
     });
   };
 
-  // 🔥 REMOTE STREAM
+  // REMOTE STREAM FIX
+  const remoteStream = new MediaStream();
+
   peerConnection.current.ontrack = (event) => {
-    console.log("REMOTE STREAM RECEIVED");
-    remoteVideoRef.current.srcObject = event.streams[0];
+  console.log("REMOTE TRACK ADDED:", event.track.kind);
+
+  remoteStream.addTrack(event.track);
+
+  remoteVideoRef.current.srcObject = remoteStream;
+
+  // 👇 VERY IMPORTANT
+  remoteVideoRef.current.play().catch((err) => {
+    console.log("Autoplay prevented:", err);
+  });
+    
   };
 };
 const startCall = async (type = "video") => {
@@ -208,6 +222,9 @@ const startCall = async (type = "video") => {
     video: type === "video",
     audio: true
   });
+  console.log("LOCAL TRACKS:", stream.getTracks());
+console.log("LOCAL AUDIO:", stream.getAudioTracks());
+console.log("LOCAL VIDEO:", stream.getVideoTracks());
 setLocalStream(stream);
   localVideoRef.current.srcObject = stream;
 
@@ -243,7 +260,9 @@ socket.emit("call-user", {
     video: callType === "video",
     audio: true
   });
-
+console.log("LOCAL TRACKS (ACCEPT):", stream.getTracks());
+console.log("LOCAL AUDIO (ACCEPT):", stream.getAudioTracks());
+console.log("LOCAL VIDEO (ACCEPT):", stream.getVideoTracks());
   setLocalStream(stream);
   localVideoRef.current.srcObject = stream;
 
