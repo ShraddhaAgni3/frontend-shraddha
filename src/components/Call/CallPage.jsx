@@ -77,7 +77,8 @@ if (state === "failed") {
 
   /* ================= START CALL ================= */
 const startCall = async (type = "video") => {
-
+console.log("CALLING FROM:", currentUserId);
+console.log("CALLING TO:", targetUserId);
   // 🔥 VERY IMPORTANT RESET (ADD HERE)
   if (peerConnection.current) {
     peerConnection.current.close();
@@ -118,6 +119,7 @@ const startCall = async (type = "video") => {
 
   /* ================= ACCEPT CALL ================= */
 const acceptCall = async () => {
+  console.log("ANSWERING TO:", incomingData?.from);
    if (peerConnection.current) {
     peerConnection.current.close();
     peerConnection.current = null;
