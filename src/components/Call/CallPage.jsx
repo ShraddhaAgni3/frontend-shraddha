@@ -64,13 +64,38 @@ export default function VideoCall({
     };
   };
 
+  /* ================= CLEANUP ================= */
+
+  const cleanupCall = () => {
+    if (peerConnection.current) {
+      peerConnection.current.ontrack = null;
+      peerConnection.current.onicecandidate = null;
+      peerConnection.current.close();
+      peerConnection.current = null;
+    }
+
+    if (localStream) {
+      localStream.getTracks().forEach((track) => track.stop());
+    }
+
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+
+    pendingCandidates.current = [];
+    otherUserRef.current = null;
+
+    setLocalStream(null);
+    setIncomingData(null);
+    setCallStatus("idle");
+    setCallDuration(0);
+    setIsMuted(false);
+    setIsCameraOff(false);
+  };
+
   /* ================= START CALL ================= */
 
   const startCall = async (type = "video") => {
     if (!targetUserId) return;
-
-    console.log("CALLING FROM:", currentUserId);
-    console.log("CALLING TO:", targetUserId);
 
     cleanupCall();
 
@@ -205,7 +230,7 @@ export default function VideoCall({
     };
   }, [socket]);
 
-  /* ================= AUTO OUTGOING ================= */
+  /* ================= OUTGOING AUTO ================= */
 
   useEffect(() => {
     if (!incomingOffer && targetUserId) {
@@ -213,10 +238,14 @@ export default function VideoCall({
     }
   }, [targetUserId]);
 
-  /* ================= INCOMING ================= */
+  /* ================= INCOMING FIXED ================= */
 
   useEffect(() => {
-    if (!incomingOffer) return;
+    if (!incomingOffer || !targetUserId) return;
+
+    console.log("Incoming from (REAL):", targetUserId);
+
+    otherUserRef.current = targetUserId;
 
     setIncomingData({
       offer: incomingOffer,
@@ -225,7 +254,7 @@ export default function VideoCall({
 
     setCallType(initialCallType || "video");
     setCallStatus("incoming");
-  }, [incomingOffer]);
+  }, [incomingOffer, targetUserId]);
 
   /* ================= TIMER ================= */
 
@@ -239,31 +268,7 @@ export default function VideoCall({
     return () => clearInterval(interval);
   }, [callStatus]);
 
-  /* ================= CLEANUP ================= */
-
-  const cleanupCall = () => {
-    if (peerConnection.current) {
-      peerConnection.current.close();
-      peerConnection.current = null;
-    }
-
-    if (localStream) {
-      localStream.getTracks().forEach((track) => track.stop());
-    }
-
-    if (localVideoRef.current) localVideoRef.current.srcObject = null;
-    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-
-    pendingCandidates.current = [];
-    otherUserRef.current = null;
-
-    setLocalStream(null);
-    setIncomingData(null);
-    setCallStatus("idle");
-    setCallDuration(0);
-    setIsMuted(false);
-    setIsCameraOff(false);
-  };
+  /* ================= END / REJECT ================= */
 
   const endCall = () => {
     if (otherUserRef.current) {
@@ -298,6 +303,7 @@ export default function VideoCall({
       .toString()
       .padStart(2, "0")}`;
   };
+
   return (
     <CallUI
       localVideoRef={localVideoRef}
