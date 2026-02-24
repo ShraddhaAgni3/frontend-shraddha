@@ -427,7 +427,7 @@ socket.on("incoming-", ({ offer, from, Type }) => {
   }; 
 
   // Search users
-  const searchUsers = useback(
+  const searchUsers = useCallback(
     async (query) => {
       if (!query.trim() || !currentUserId) return;
       setLoading(true);
