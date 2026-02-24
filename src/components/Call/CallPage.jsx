@@ -83,6 +83,7 @@ const startCall = async (type = "video") => {
     peerConnection.current.close();
     peerConnection.current = null;
   }
+  pendingCandidates.current = [];
 
   const iceConfig = await refreshTurnServers();
 
@@ -291,10 +292,12 @@ const handleAnswer = async ({ answer }) => {
 };
 
   const endCall = () => {
-    socket.emit("end-call", { to: targetUserId.toString() });
-    cleanupCall();
-    onClose();
-  };
+  if (otherUserRef.current) {
+    socket.emit("end-call", { to: otherUserRef.current.toString() });
+  }
+  cleanupCall();
+  onClose();
+};
 
   const rejectCall = () => {
     socket.emit("end-call", { to: otherUserRef.current.toString() });
