@@ -391,8 +391,6 @@ socket.on("connect", () => {
     //shraddha new code
     // ✅ INCOMING  LISTENER ADD HERE
 socket.on("incoming-call", ({ offer, from, callType }) => {
-  console.log("📞 Incoming call from:", from);
-
   setCallData({
     offer,
     from,
@@ -900,12 +898,12 @@ socket.on("incoming-call", ({ offer, from, callType }) => {
        {/* shraddha new code */}
 {showCall && (
   <CallPage
-    key={Date.now()}  
+    key={Date.now()}
     socket={socketRef.current}
     currentUserId={currentUserId}
-    targetUserId={selectedUser?.id}
-    incomingOffer={callData?.offer}
-    callType={callData?.callType}
+    targetUserId={callData?.offer ? callData.from : selectedUser?.id}
+    incomingOffer={callData?.offer || null}
+    callType={callData?.callType || "video"}
     onClose={() => {
       setShowCall(false);
       setCallData(null);
@@ -1182,15 +1180,17 @@ socket.on("incoming-call", ({ offer, from, callType }) => {
               <div className="hidden md:flex p-4 border-b border-gray-200 bg-white items-center gap-3">
                 {/*  PROFILE PICTURE WITH FALLBACK */}
                 {/* shraddha new code */}
-              <button
+            <button
   onClick={() => {
+    if (!selectedUser?.id) return;
+
     setCallData({
       offer: null,
       callType: "video"
     });
+
     setShowCall(true);
   }}
-  className="ml-auto px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
 >
   📞 Call
 </button>
