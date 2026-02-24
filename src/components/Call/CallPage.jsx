@@ -237,18 +237,21 @@ const handleAnswer = async ({ answer }) => {
 
   /* ================= INCOMING CALL ================= */
 
-  useEffect(() => {
-    if (incomingOffer) {
-      setIncomingData({
-        offer: incomingOffer,
-        from: incomingOffer.from || targetUserId
-      });
+ useEffect(() => {
+  if (!incomingOffer) return;
 
-      otherUserRef.current = targetUserId;
-      setCallType(initialCallType || "video");
-      setCallStatus("incoming");
-    }
-  }, [incomingOffer]);
+  console.log("Incoming from:", targetUserId);
+
+  setIncomingData({
+    offer: incomingOffer,
+    from: targetUserId
+  });
+
+  otherUserRef.current = targetUserId;
+  setCallType(initialCallType || "video");
+  setCallStatus("incoming");
+
+}, [incomingOffer]);
 
   /* ================= TIMER ================= */
 
