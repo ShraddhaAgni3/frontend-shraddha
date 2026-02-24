@@ -235,7 +235,7 @@ const handleAnswer = async ({ answer }) => {
     if (incomingOffer) {
       setIncomingData({
         offer: incomingOffer,
-        from: targetUserId.toString()
+        from: incomingOffer.from || targetUserId
       });
 
       otherUserRef.current = targetUserId;
