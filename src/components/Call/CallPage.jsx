@@ -239,10 +239,10 @@ const handleAnswer = async ({ answer }) => {
 
   /* ================= INCOMING CALL ================= */
 
- useEffect(() => {
+useEffect(() => {
   if (!incomingOffer) return;
 
-  console.log("Incoming from:", targetUserId);
+  console.log("Incoming from (REAL):", targetUserId);
 
   setIncomingData({
     offer: incomingOffer,
@@ -253,7 +253,7 @@ const handleAnswer = async ({ answer }) => {
   setCallType(initialCallType || "video");
   setCallStatus("incoming");
 
-}, [incomingOffer]);
+}, [incomingOffer, targetUserId]);
 
   /* ================= TIMER ================= */
 
