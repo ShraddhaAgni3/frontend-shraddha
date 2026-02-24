@@ -165,7 +165,12 @@ const acceptCall = async () => {
 };
 
   /* ================= SOCKET LISTENERS ================= */
-  
+  useEffect(() => {
+  if (!incomingOffer && targetUserId) {
+    // Outgoing call
+    startCall(initialCallType || "video");
+  }
+}, []);
 
   useEffect(() => {
     if (!socket) return;
