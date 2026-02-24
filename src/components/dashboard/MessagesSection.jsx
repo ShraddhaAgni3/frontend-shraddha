@@ -900,6 +900,7 @@ socket.on("incoming-call", ({ offer, from, callType }) => {
        {/* shraddha new code */}
 {showCall && (
   <CallPage
+    key={Date.now()}  
     socket={socketRef.current}
     currentUserId={currentUserId}
     targetUserId={selectedUser?.id}
