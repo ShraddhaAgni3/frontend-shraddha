@@ -167,10 +167,10 @@ const acceptCall = async () => {
   /* ================= SOCKET LISTENERS ================= */
   useEffect(() => {
   if (!incomingOffer && targetUserId) {
-    // Outgoing call
+    console.log("🚀 Outgoing call starting...");
     startCall(initialCallType || "video");
   }
-}, []);
+}, [targetUserId]);
 
   useEffect(() => {
     if (!socket) return;
@@ -294,6 +294,9 @@ const handleAnswer = async ({ answer }) => {
   setIncomingData(null);
   setCallDuration(0);
   setCallStatus("idle");
+   setCallType("video");
+  setIsMuted(false);
+  setIsCameraOff(false);
 };
 
   const endCall = () => {
