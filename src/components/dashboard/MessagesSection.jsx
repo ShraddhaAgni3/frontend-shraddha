@@ -389,17 +389,17 @@ socket.on("connect", () => {
 
     socket.on("new_message", handleIncomingMessage);
     //shraddha new code
-    // ✅ INCOMING CALL LISTENER ADD HERE
-socket.on("incoming-call", ({ offer, from, callType }) => {
-  console.log("📞 Incoming call from:", from);
+    // ✅ INCOMING  LISTENER ADD HERE
+socket.on("incoming-", ({ offer, from, Type }) => {
+  console.log("📞 Incoming  from:", from);
 
-  setCallData({
+  setData({
     offer,
     from,
-    callType
+    Type
   });
 
-  setShowCall(true);
+  setShow(true);
 });
 
 //end
@@ -407,7 +407,7 @@ socket.on("incoming-call", ({ offer, from, callType }) => {
     return () => {
       socket.off("new_message", handleIncomingMessage);
       socket.off("new_reaction");
-      socket.off("incoming-call"); //shraddha new code
+      socket.off("incoming-"); //shraddha new code
       socket.disconnect();
     };
   }, [currentUserId]);
@@ -427,7 +427,7 @@ socket.on("incoming-call", ({ offer, from, callType }) => {
   }; 
 
   // Search users
-  const searchUsers = useCallback(
+  const searchUsers = useback(
     async (query) => {
       if (!query.trim() || !currentUserId) return;
       setLoading(true);
@@ -898,16 +898,16 @@ socket.on("incoming-call", ({ offer, from, callType }) => {
     <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
       <h2 className="text-2xl font-bold text-gray-800 mb-6">Messages</h2>
        {/* shraddha new code */}
-{showCall && (
-  <CallPage
+{show && (
+  <Page
     socket={socketRef.current}
     currentUserId={currentUserId}
-    targetUserId={callData?.from || selectedUser?.id}
-    incomingOffer={callData?.offer}
-    callType={callData?.callType}
+    targetUserId={Data?.from || selectedUser?.id}
+    incomingOffer={Data?.offer}
+    Type={Data?.Type}
     onClose={() => {
-      setShowCall(false);
-      setCallData(null);
+      setShow(false);
+      setData(null);
     }}
   />
 )}
@@ -1182,7 +1182,10 @@ socket.on("incoming-call", ({ offer, from, callType }) => {
                 {/*  PROFILE PICTURE WITH FALLBACK */}
                 {/* shraddha new code */}
                 <button
-  onClick={() => setShowCall(true)}
+  onClick={() => {
+    setCallData(null); // caller mode
+    setShowCall(true);
+  }}
   className="ml-auto px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
 >
   📞 Call
