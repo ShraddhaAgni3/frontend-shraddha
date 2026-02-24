@@ -902,7 +902,7 @@ socket.on("incoming-call", ({ offer, from, callType }) => {
   <CallPage
     socket={socketRef.current}
     currentUserId={currentUserId}
-    targetUserId={callData?.from || selectedUser?.id}
+    targetUserId={selectedUser?.id}
     incomingOffer={callData?.offer}
     callType={callData?.callType}
     onClose={() => {
@@ -1181,10 +1181,9 @@ socket.on("incoming-call", ({ offer, from, callType }) => {
               <div className="hidden md:flex p-4 border-b border-gray-200 bg-white items-center gap-3">
                 {/*  PROFILE PICTURE WITH FALLBACK */}
                 {/* shraddha new code */}
-               <button
+              <button
   onClick={() => {
     setCallData({
-      from: selectedUser?.id,
       offer: null,
       callType: "video"
     });
