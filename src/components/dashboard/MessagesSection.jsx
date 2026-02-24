@@ -901,7 +901,11 @@ socket.on("incoming-call", ({ offer, from, callType }) => {
     key={Date.now()}
     socket={socketRef.current}
     currentUserId={currentUserId}
-    targetUserId={callData?.offer ? callData.from : selectedUser?.id}
+   targetUserId={
+  callData?.offer
+    ? callData.from      // caller id
+    : selectedUser?.id  // outgoing
+}
     incomingOffer={callData?.offer || null}
     callType={callData?.callType || "video"}
     onClose={() => {
