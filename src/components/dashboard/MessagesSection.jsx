@@ -20,7 +20,7 @@ export default function MessagesSection() {
   const [callData, setCallData] = useState(null);
 const [showCall, setShowCall] = useState(false);//end
 
-
+const [callTargetId, setCallTargetId] = useState(null);
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -391,12 +391,10 @@ socket.on("connect", () => {
     //shraddha new code
     // ✅ INCOMING  LISTENER ADD HERE
 socket.on("incoming-call", ({ offer, from, callType }) => {
-  setCallData({
-    offer,
-    from,
-    callType
-  });
+  console.log("SERVER SENT CALL FROM:", from);
 
+  setCallTargetId(from);   // 🔥 store caller id directly
+  setCallData({ offer, callType });
   setShowCall(true);
 });
 
@@ -896,22 +894,19 @@ socket.on("incoming-call", ({ offer, from, callType }) => {
     <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
       <h2 className="text-2xl font-bold text-gray-800 mb-6">Messages</h2>
        {/* shraddha new code */}
-{showCall && (
+{showCall && callTargetId && (
   <CallPage
-  socket={socketRef.current}
-  currentUserId={currentUserId}
-  targetUserId={
-    callData?.offer
-      ? callData.from
-      : selectedUser?.id
-  }
-  incomingOffer={callData?.offer || null}
-  callType={callData?.callType || "video"}
-  onClose={() => {
-    setShowCall(false);
-    setCallData(null);
-  }}
-/>
+    socket={socketRef.current}
+    currentUserId={currentUserId}
+    targetUserId={callTargetId}   // 🔥 always correct
+    incomingOffer={callData?.offer || null}
+    callType={callData?.callType || "video"}
+    onClose={() => {
+      setShowCall(false);
+      setCallData(null);
+      setCallTargetId(null);   // reset properly
+    }}
+  />
 )}
  {/* shraddha new code end */}
 
@@ -1185,15 +1180,16 @@ socket.on("incoming-call", ({ offer, from, callType }) => {
                 {/* shraddha new code */}
             <button
   onClick={() => {
-    if (!selectedUser?.id) return;
+  if (!selectedUser?.id) return;
 
-    setCallData({
-      offer: null,
-      callType: "video"
-    });
+  setCallTargetId(selectedUser.id);  // 🔥 explicitly store target
+  setCallData({
+    offer: null,
+    callType: "video"
+  });
 
-    setShowCall(true);
-  }}
+  setShowCall(true);
+}}
 >
   📞 Call
 </button>
