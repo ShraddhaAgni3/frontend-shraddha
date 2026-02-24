@@ -898,21 +898,20 @@ socket.on("incoming-call", ({ offer, from, callType }) => {
        {/* shraddha new code */}
 {showCall && (
   <CallPage
-    key={Date.now()}
-    socket={socketRef.current}
-    currentUserId={currentUserId}
-   targetUserId={
-  callData?.offer
-    ? callData.from      // caller id
-    : selectedUser?.id  // outgoing
-}
-    incomingOffer={callData?.offer || null}
-    callType={callData?.callType || "video"}
-    onClose={() => {
-      setShowCall(false);
-      setCallData(null);
-    }}
-  />
+  socket={socketRef.current}
+  currentUserId={currentUserId}
+  targetUserId={
+    callData?.offer
+      ? callData.from
+      : selectedUser?.id
+  }
+  incomingOffer={callData?.offer || null}
+  callType={callData?.callType || "video"}
+  onClose={() => {
+    setShowCall(false);
+    setCallData(null);
+  }}
+/>
 )}
  {/* shraddha new code end */}
 
