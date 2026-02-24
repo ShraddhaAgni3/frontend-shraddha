@@ -42,72 +42,85 @@ export default function VideoCall({
 
   const createPeerConnection = (config) => {
 
-    peerConnection.current = new RTCPeerConnection(config);
+  peerConnection.current = new RTCPeerConnection(config);
 
-    peerConnection.current.oniceconnectionstatechange = () => {
-      console.log("ICE STATE:", peerConnection.current.iceConnectionState);
-    };
-
-    peerConnection.current.onconnectionstatechange = () => {
-      console.log("CONNECTION STATE:", peerConnection.current.connectionState);
-    };
-
-    peerConnection.current.onicecandidate = (event) => {
-      if (!event.candidate || !socket || !otherUserRef.current) return;
-
-      socket.emit("ice-candidate", {
-        to: otherUserRef.current.toString(),
-        candidate: event.candidate
-      });
-    };
-  
-
-    peerConnection.current.ontrack = (event) => {
-  if (!remoteVideoRef.current.srcObject) {
-    remoteVideoRef.current.srcObject = new MediaStream();
-  }
-
-  remoteVideoRef.current.srcObject.addTrack(event.track);
-};
+  // 🔥 Replace old ICE handler with this
+  peerConnection.current.oniceconnectionstatechange = () => {
+    const state = peerConnection.current.iceConnectionState;
+    console.log("ICE STATE:", state);
+if (state === "failed") {
+      console.log("⚠️ ICE failed — cleaning up");
+      cleanupCall();
+    }
   };
+
+  peerConnection.current.onconnectionstatechange = () => {
+    console.log("CONNECTION STATE:", peerConnection.current.connectionState);
+  };
+
+  peerConnection.current.onicecandidate = (event) => {
+    if (!event.candidate || !socket || !otherUserRef.current) return;
+
+    socket.emit("ice-candidate", {
+      to: otherUserRef.current.toString(),
+      candidate: event.candidate
+    });
+  };
+
+  peerConnection.current.ontrack = (event) => {
+    if (!remoteVideoRef.current.srcObject) {
+      remoteVideoRef.current.srcObject = new MediaStream();
+    }
+    remoteVideoRef.current.srcObject.addTrack(event.track);
+  };
+};
 
   /* ================= START CALL ================= */
+const startCall = async (type = "video") => {
 
-  const startCall = async (type = "video") => {
+  // 🔥 VERY IMPORTANT RESET (ADD HERE)
+  if (peerConnection.current) {
+    peerConnection.current.close();
+    peerConnection.current = null;
+  }
 
-    const iceConfig = await refreshTurnServers();
+  const iceConfig = await refreshTurnServers();
 
-    setCallType(type);
-    setCallStatus("calling");
-    otherUserRef.current = targetUserId;
+  setCallType(type);
+  setCallStatus("calling");
+  otherUserRef.current = targetUserId;
 
-    createPeerConnection(iceConfig);
+  createPeerConnection(iceConfig);
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: type === "video",
-      audio: true
-    });
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: type === "video",
+    audio: true
+  });
 
-    setLocalStream(stream);
-    localVideoRef.current.srcObject = stream;
+  setLocalStream(stream);
+  localVideoRef.current.srcObject = stream;
 
-    stream.getTracks().forEach(track =>
-      peerConnection.current.addTrack(track, stream)
-    );
+  stream.getTracks().forEach(track =>
+    peerConnection.current.addTrack(track, stream)
+  );
 
-    const offer = await peerConnection.current.createOffer();
-    await peerConnection.current.setLocalDescription(offer);
+  const offer = await peerConnection.current.createOffer();
+  await peerConnection.current.setLocalDescription(offer);
 
-    socket.emit("call-user", {
-      to: targetUserId.toString(),
-      from: currentUserId.toString(),
-      offer,
-      callType: type
-    });
-  };
+  socket.emit("call-user", {
+    to: targetUserId.toString(),
+    from: currentUserId.toString(),
+    offer,
+    callType: type
+  });
+};
 
   /* ================= ACCEPT CALL ================= */
 const acceptCall = async () => {
+   if (peerConnection.current) {
+    peerConnection.current.close();
+    peerConnection.current = null;
+  }
 
   const iceConfig = await refreshTurnServers();
   createPeerConnection(iceConfig);
@@ -245,26 +258,37 @@ const handleAnswer = async ({ answer }) => {
 
   /* ================= CLEANUP ================= */
 
-  const cleanupCall = () => {
-    if (peerConnection.current) {
-      peerConnection.current.close();
-      peerConnection.current = null;
-    }
+ const cleanupCall = () => {
+  if (peerConnection.current) {
+    peerConnection.current.onicecandidate = null;
+    peerConnection.current.ontrack = null;
+    peerConnection.current.oniceconnectionstatechange = null;
+    peerConnection.current.onconnectionstatechange = null;
 
-    if (localVideoRef.current?.srcObject) {
-      localVideoRef.current.srcObject.getTracks().forEach(track => track.stop());
-      localVideoRef.current.srcObject = null;
-    }
+    peerConnection.current.close();
+    peerConnection.current = null;
+  }
 
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null;
-    }
-pendingCandidates.current = [];
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+  }
+
+  if (localVideoRef.current) {
+    localVideoRef.current.srcObject = null;
+  }
+
+  if (remoteVideoRef.current) {
+    remoteVideoRef.current.srcObject = null;
+  }
+
+  pendingCandidates.current = [];
   otherUserRef.current = null;
+
+  setLocalStream(null);
   setIncomingData(null);
-    setCallDuration(0);
-    setCallStatus("idle");
-  };
+  setCallDuration(0);
+  setCallStatus("idle");
+};
 
   const endCall = () => {
     socket.emit("end-call", { to: targetUserId.toString() });
