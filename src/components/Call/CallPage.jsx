@@ -233,10 +233,10 @@ export default function VideoCall({
   /* ================= OUTGOING AUTO ================= */
 
   useEffect(() => {
-    if (!incomingOffer && targetUserId) {
-      startCall(initialCallType || "video");
-    }
-  }, [targetUserId]);
+  if (!incomingOffer && targetUserId && callStatus === "idle") {
+    startCall(initialCallType || "video");
+  }
+}, [targetUserId]);
 
   /* ================= INCOMING FIXED ================= */
 
