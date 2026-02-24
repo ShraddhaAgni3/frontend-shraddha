@@ -151,28 +151,39 @@ const acceptCall = async () => {
 };
 
   /* ================= SOCKET LISTENERS ================= */
-useEffect(() => {
-  if (!incomingOffer && targetUserId && callStatus === "idle") {
-    startCall("video");
-  }
-}, []);
+  
+
   useEffect(() => {
     if (!socket) return;
+const handleAnswer = async ({ answer }) => {
+  if (!peerConnection.current) return;
 
-    const handleAnswer = async ({ answer }) => {
-  await peerConnection.current.setRemoteDescription(
-    new RTCSessionDescription(answer)
-  );
-
-  // Flush pending ICE
-  for (const c of pendingCandidates.current) {
-    await peerConnection.current.addIceCandidate(
-      new RTCIceCandidate(c)
+  if (
+    peerConnection.current.signalingState !== "have-local-offer"
+  ) {
+    console.log(
+      "⚠️ Ignoring answer in state:",
+      peerConnection.current.signalingState
     );
+    return;
   }
-  pendingCandidates.current = [];
 
-  setCallStatus("connected");
+  try {
+    await peerConnection.current.setRemoteDescription(
+      new RTCSessionDescription(answer)
+    );
+
+    for (const c of pendingCandidates.current) {
+      await peerConnection.current.addIceCandidate(
+        new RTCIceCandidate(c)
+      );
+    }
+    pendingCandidates.current = [];
+
+    setCallStatus("connected");
+  } catch (err) {
+    console.error("Error setting remote answer:", err);
+  }
 };
 
     const handleIce = async ({ candidate }) => {
@@ -248,7 +259,9 @@ useEffect(() => {
     if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = null;
     }
-
+pendingCandidates.current = [];
+  otherUserRef.current = null;
+  setIncomingData(null);
     setCallDuration(0);
     setCallStatus("idle");
   };
