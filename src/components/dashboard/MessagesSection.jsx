@@ -369,7 +369,7 @@ useEffect(() => {
     socket.off("new_message", handleIncomingMessage);
     socket.off("incoming-call", handleIncomingCall);
   };
-}, [currentUserId, selectedUser]);
+}, [currentUserId]);
 
   // Auto-scroll
   useEffect(() => {
