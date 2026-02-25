@@ -390,22 +390,14 @@ socket.on("connect", () => {
     socket.on("new_message", handleIncomingMessage);
     //shraddha new code
     // ✅ INCOMING  LISTENER ADD HERE
-socket.on("incoming-call", ({ offer, from, callType }) => {
-  setCallData({
-    targetId: from,   // the caller
-    isIncoming: true,
-    offer,
-    callType
-  });
-  setShowCall(true);
-});
+
 
 //end
 
     return () => {
       socket.off("new_message", handleIncomingMessage);
       socket.off("new_reaction");
-      socket.off("incoming-call"); //shraddha new code
+      
       socket.disconnect();
     };
   }, [currentUserId]);
