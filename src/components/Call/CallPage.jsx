@@ -7,7 +7,7 @@ export default function VideoCall({
   targetUserId,
   incomingOffer,
   callType: initialCallType,
-  onClose
+  onClose,
 }) {
   const peerConnection = useRef(null);
   const otherUserRef = useRef(null);
@@ -37,15 +37,13 @@ export default function VideoCall({
   /* ================= PEER ================= */
 
   const createPeerConnection = (config) => {
+    if (peerConnection.current) {
+      peerConnection.current.ontrack = null;
+      peerConnection.current.onicecandidate = null;
+      peerConnection.current.close();
+    }
+
     peerConnection.current = new RTCPeerConnection(config);
-
-    peerConnection.current.oniceconnectionstatechange = () => {
-      console.log("ICE STATE:", peerConnection.current.iceConnectionState);
-    };
-
-    peerConnection.current.onconnectionstatechange = () => {
-      console.log("CONNECTION STATE:", peerConnection.current.connectionState);
-    };
 
     peerConnection.current.onicecandidate = (event) => {
       if (!event.candidate || !otherUserRef.current) return;
@@ -75,7 +73,7 @@ export default function VideoCall({
     }
 
     if (localStream) {
-      localStream.getTracks().forEach((track) => track.stop());
+      localStream.getTracks().forEach((t) => t.stop());
     }
 
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
@@ -92,12 +90,15 @@ export default function VideoCall({
     setIsCameraOff(false);
   };
 
-  /* ================= START CALL ================= */
+  /* ================= START CALL (CALLER) ================= */
 
   const startCall = async (type = "video") => {
-    if (!targetUserId) return;
+    if (!socket?.connected) {
+      console.warn("Socket not ready");
+      return;
+    }
 
-    cleanupCall();
+    if (!targetUserId || callStatus !== "idle") return;
 
     const config = await refreshTurnServers();
     createPeerConnection(config);
@@ -112,7 +113,9 @@ export default function VideoCall({
     });
 
     setLocalStream(stream);
-    localVideoRef.current.srcObject = stream;
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = stream;
+    }
 
     stream.getTracks().forEach((track) =>
       peerConnection.current.addTrack(track, stream)
@@ -129,12 +132,10 @@ export default function VideoCall({
     });
   };
 
-  /* ================= ACCEPT CALL ================= */
+  /* ================= ACCEPT CALL (RECEIVER) ================= */
 
   const acceptCall = async () => {
-    if (!incomingData) return;
-
-    cleanupCall();
+    if (!incomingData || callStatus !== "incoming") return;
 
     const config = await refreshTurnServers();
     createPeerConnection(config);
@@ -148,7 +149,9 @@ export default function VideoCall({
     });
 
     setLocalStream(stream);
-    localVideoRef.current.srcObject = stream;
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = stream;
+    }
 
     stream.getTracks().forEach((track) =>
       peerConnection.current.addTrack(track, stream)
@@ -176,16 +179,14 @@ export default function VideoCall({
     setCallStatus("connected");
   };
 
-  /* ================= SOCKET ================= */
+  /* ================= SOCKET LISTENERS ================= */
 
   useEffect(() => {
     if (!socket) return;
 
     const handleAnswer = async ({ answer }) => {
       if (!peerConnection.current) return;
-
-      if (peerConnection.current.signalingState !== "have-local-offer")
-        return;
+      if (peerConnection.current.signalingState !== "have-local-offer") return;
 
       await peerConnection.current.setRemoteDescription(
         new RTCSessionDescription(answer)
@@ -196,8 +197,8 @@ export default function VideoCall({
           new RTCIceCandidate(c)
         );
       }
-
       pendingCandidates.current = [];
+
       setCallStatus("connected");
     };
 
@@ -219,6 +220,10 @@ export default function VideoCall({
       onClose();
     };
 
+    socket.off("call-answered");
+    socket.off("ice-candidate");
+    socket.off("call-ended");
+
     socket.on("call-answered", handleAnswer);
     socket.on("ice-candidate", handleIce);
     socket.on("call-ended", handleEnd);
@@ -230,31 +235,21 @@ export default function VideoCall({
     };
   }, [socket]);
 
-  /* ================= OUTGOING AUTO ================= */
+  /* ================= INCOMING OFFER ================= */
 
   useEffect(() => {
-  if (!incomingOffer && targetUserId && callStatus === "idle") {
-    startCall(initialCallType || "video");
-  }
-}, [targetUserId]);
+    if (!incomingOffer) return;
 
-  /* ================= INCOMING FIXED ================= */
-
-  useEffect(() => {
-    if (!incomingOffer || !targetUserId) return;
-
-    console.log("Incoming from (REAL):", targetUserId);
-
-    otherUserRef.current = targetUserId;
+    otherUserRef.current = incomingOffer.from;
 
     setIncomingData({
-      offer: incomingOffer,
-      from: targetUserId,
+      offer: incomingOffer.offer,
+      from: incomingOffer.from,
     });
 
-    setCallType(initialCallType || "video");
+    setCallType(incomingOffer.callType || "video");
     setCallStatus("incoming");
-  }, [incomingOffer, targetUserId]);
+  }, [incomingOffer]);
 
   /* ================= TIMER ================= */
 
@@ -262,7 +257,7 @@ export default function VideoCall({
     let interval;
     if (callStatus === "connected") {
       interval = setInterval(() => {
-        setCallDuration((prev) => prev + 1);
+        setCallDuration((p) => p + 1);
       }, 1000);
     }
     return () => clearInterval(interval);
@@ -278,13 +273,7 @@ export default function VideoCall({
     onClose();
   };
 
-  const rejectCall = () => {
-    if (otherUserRef.current) {
-      socket.emit("end-call", { to: otherUserRef.current });
-    }
-    cleanupCall();
-    onClose();
-  };
+  const rejectCall = endCall;
 
   const toggleMute = () => {
     localStream?.getAudioTracks().forEach((t) => (t.enabled = !t.enabled));
@@ -296,13 +285,10 @@ export default function VideoCall({
     setIsCameraOff((p) => !p);
   };
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs
-      .toString()
-      .padStart(2, "0")}`;
-  };
+  const formatTime = (sec) =>
+    `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(
+      sec % 60
+    ).padStart(2, "0")}`;
 
   return (
     <CallUI
