@@ -200,21 +200,32 @@ export default function VideoCall({
   useEffect(() => {
     if (!socket) return;
 
-    const handleAnswer = async ({ answer }) => {
-      if (!peerConnection.current) return;
+  const handleAnswer = async ({ answer }) => {
+  if (!peerConnection.current) return;
 
-      await peerConnection.current.setRemoteDescription(
-        new RTCSessionDescription(answer)
+  // Only caller should receive answer
+  if (peerConnection.current.signalingState !== "have-local-offer") {
+    console.log("Ignoring duplicate or invalid answer");
+    return;
+  }
+
+  try {
+    await peerConnection.current.setRemoteDescription(
+      new RTCSessionDescription(answer)
+    );
+
+    // Apply buffered ICE
+    pendingCandidates.current.forEach(candidate => {
+      peerConnection.current.addIceCandidate(
+        new RTCIceCandidate(candidate)
       );
+    });
+    pendingCandidates.current = [];
 
-      // Apply buffered ICE
-      pendingCandidates.current.forEach(candidate => {
-        peerConnection.current.addIceCandidate(
-          new RTCIceCandidate(candidate)
-        );
-      });
-      pendingCandidates.current = [];
-    };
+  } catch (err) {
+    console.error("Answer set error:", err);
+  }
+};
 
     const handleIce = async ({ candidate }) => {
       if (!peerConnection.current) return;
