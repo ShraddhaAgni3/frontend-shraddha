@@ -19,22 +19,21 @@ export default function CallUI({
 }) {
 
   const [isLocalFull, setIsLocalFull] = useState(false);
-  const isVideoConnected =
+
+  const isVideoActive =
     callStatus === "connected" && callType === "video";
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black overflow-hidden">
+    <div className="fixed inset-0 bg-black z-[9999]">
 
-      {/* ALWAYS MOUNTED VIDEO ELEMENTS */}
+      {/* VIDEO ELEMENTS ALWAYS MOUNTED */}
       <video
         ref={remoteVideoRef}
         autoPlay
         playsInline
         className={`absolute object-cover ${
-          isVideoConnected
-            ? isLocalFull
-              ? "bottom-6 right-6 w-48 h-32 rounded-lg border-2 border-white z-40"
-              : "inset-0 w-full h-full z-10"
+          isVideoActive
+            ? "inset-0 w-full h-full"
             : "hidden"
         }`}
       />
@@ -45,10 +44,8 @@ export default function CallUI({
         playsInline
         muted
         className={`absolute object-cover ${
-          isVideoConnected
-            ? isLocalFull
-              ? "inset-0 w-full h-full z-10"
-              : "bottom-6 right-6 w-48 h-32 rounded-lg border-2 border-white z-40"
+          isVideoActive
+            ? "bottom-6 right-6 w-48 h-32 border-2 border-white rounded-lg"
             : "hidden"
         }`}
       />
@@ -68,8 +65,12 @@ export default function CallUI({
         <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
           <h2>Incoming Call</h2>
           <div className="flex gap-4 mt-4">
-            <button onClick={acceptCall} className="bg-green-600 px-6 py-3 rounded-full">Accept</button>
-            <button onClick={rejectCall} className="bg-red-600 px-6 py-3 rounded-full">Reject</button>
+            <button onClick={acceptCall} className="bg-green-600 px-6 py-3 rounded-full">
+              Accept
+            </button>
+            <button onClick={rejectCall} className="bg-red-600 px-6 py-3 rounded-full">
+              Reject
+            </button>
           </div>
         </div>
       )}
@@ -80,6 +81,7 @@ export default function CallUI({
             <button onClick={toggleMute} className="bg-gray-700 px-4 py-2 rounded-full text-white">
               {isMuted ? "🔈 Unmute" : "🔇 Mute"}
             </button>
+
             {callType === "video" && (
               <button onClick={toggleCamera} className="bg-gray-700 px-4 py-2 rounded-full text-white">
                 {isCameraOff ? "📷 On" : "🚫 Off"}
@@ -94,6 +96,7 @@ export default function CallUI({
           </div>
         </>
       )}
+
     </div>
   );
 }
