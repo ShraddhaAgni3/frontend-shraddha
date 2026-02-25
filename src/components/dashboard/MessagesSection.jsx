@@ -353,11 +353,16 @@ useEffect(() => {
   };
 
   const handleIncomingCall = ({ offer, from, callType }) => {
-    console.log("📞 Incoming call from:", from);
-    setCallTargetId(from);
-    setCallData({ offer, callType });
-    setShowCall(true);
-  };
+  if (!socket?.connected) {
+    console.warn("Incoming call but socket not ready");
+    return;
+  }
+
+  console.log("📞 Incoming call from:", from);
+  setCallTargetId(from);
+  setCallData({ offer, callType });
+  setShowCall(true);
+};
 
   // ✅ IMPORTANT — REGISTER LISTENERS
   socket.on("new_reaction", handleReaction);
@@ -859,10 +864,14 @@ useEffect(() => {
     incomingOffer={callData?.offer || null}
     callType={callData?.callType || "video"}
     onClose={() => {
-      setShowCall(false);
-      setCallData(null);
-      setCallTargetId(null);   // reset properly
-    }}
+  if (socket?.connected && callTargetId) {
+    socket.emit("end-call", { to: callTargetId });
+  }
+
+  setShowCall(false);
+  setCallData(null);
+  setCallTargetId(null);
+}}
   />
 )}
  {/* shraddha new code end */}
@@ -1137,16 +1146,21 @@ useEffect(() => {
                 {/* shraddha new code */}
             <button
   onClick={() => {
-  if (!selectedUser?.id) return;
+    if (!socket?.connected) {
+      console.warn("Socket not ready yet");
+      alert("Connection not ready, please wait...");
+      return;
+    }
 
-  setCallTargetId(selectedUser.id);  // 🔥 explicitly store target
-  setCallData({
-    offer: null,
-    callType: "video"
-  });
+    if (!selectedUser?.id) return;
 
-  setShowCall(true);
-}}
+    setCallTargetId(selectedUser.id);
+    setCallData({
+      offer: null,
+      callType: "video",
+    });
+    setShowCall(true);
+  }}
 >
   📞 Call
 </button>
