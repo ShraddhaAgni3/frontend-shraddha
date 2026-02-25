@@ -298,21 +298,10 @@ const [showCall, setShowCall] = useState(false);//end
       document.removeEventListener("keydown", handleEscape);
       document.body.style.overflow = "unset";
     };
-  }, [showImageModal]);
-
-  useEffect(() => {
+  }, [showImageModal]);useEffect(() => {
   if (!currentUserId) return;
 
   socketRef.current = socket;
-
-  const handleConnect = () => {
-    console.log("Socket connected");
-    socket.emit("register_user", currentUserId.toString());
-  };
-
-  const handleDisconnect = () => {
-    console.log("Socket disconnected");
-  };
 
   const handleIncomingMessage = (message) => {
     fetchRecentChats();
@@ -358,14 +347,10 @@ const [showCall, setShowCall] = useState(false);//end
     });
   };
 
-  socket.on("connect", handleConnect);
-  socket.on("disconnect", handleDisconnect);
   socket.on("new_message", handleIncomingMessage);
   socket.on("new_reaction", handleReaction);
 
   return () => {
-    socket.off("connect", handleConnect);
-    socket.off("disconnect", handleDisconnect);
     socket.off("new_message", handleIncomingMessage);
     socket.off("new_reaction", handleReaction);
   };
@@ -857,19 +842,7 @@ const [showCall, setShowCall] = useState(false);//end
     <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
       <h2 className="text-2xl font-bold text-gray-800 mb-6">Messages</h2>
        {/* shraddha new code */}
-{showCall && callData && (
-  <CallPage
-    socket={socketRef.current}
-    currentUserId={currentUserId}
-    targetUserId={callData.targetId}
-    incomingOffer={callData.isIncoming ? callData.offer : null}
-    callType={callData.callType}
-    onClose={() => {
-      setShowCall(false);
-      setCallData(null);
-    }}
-  />
-)}
+
  {/* shraddha new code end */}
 
       {/* PLAN STATUS BANNER - TOP ME ADD KIYA HAI */}
@@ -1142,13 +1115,14 @@ const [showCall, setShowCall] = useState(false);//end
                 {/* shraddha new code */}
                <button
   onClick={() => {
-    setCallData({
-      targetId: selectedUser.id,
-      isIncoming: false,
-      offer: null,
-      callType: "video"
-    });
-    setShowCall(true);
+    window.dispatchEvent(
+      new CustomEvent("start-call", {
+        detail: {
+          targetId: selectedUser.id,
+          callType: "video",
+        },
+      })
+    );
   }}
   className="ml-auto px-3 py-2 bg-green-500 text-white rounded-lg"
 >
