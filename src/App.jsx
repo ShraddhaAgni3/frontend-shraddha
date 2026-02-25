@@ -94,24 +94,6 @@ export default function App() {
   //shraddha new code start
   const [incomingCall, setIncomingCall] = useState(null);
 const [currentUserId, setCurrentUserId] = useState(null);
-  useEffect(() => {
-  const handleStartCall = (e) => {
-    const { targetId, callType } = e.detail;
-
-    setIncomingCall({
-      offer: null,
-      from: targetId,
-      callType,
-      outgoing: true,
-    });
-  };
-
-  window.addEventListener("start-call", handleStartCall);
-
-  return () => {
-    window.removeEventListener("start-call", handleStartCall);
-  };
-}, []);
 useEffect(() => {
   const storedUser = localStorage.getItem("currentUser");
   if (storedUser) {
@@ -123,19 +105,10 @@ useEffect(() => {
 useEffect(() => {
   if (!currentUserId) return;
 
-  const handleConnect = () => {
-    console.log("🔌 Socket Connected - Registering user");
-    socket.emit("register_user", currentUserId.toString());
-  };
-
-  if (socket.connected) {
-    handleConnect();
-  }
-
-  socket.on("connect", handleConnect);
+  socket.emit("register_user", currentUserId.toString());
 
   const handleIncomingCall = ({ offer, from, callType }) => {
-    console.log("📞 Global Incoming Call");
+    console.log("📞 Global Incoming Call Received");
 
     setIncomingCall({
       offer,
@@ -147,7 +120,6 @@ useEffect(() => {
   socket.on("incoming-call", handleIncomingCall);
 
   return () => {
-    socket.off("connect", handleConnect);
     socket.off("incoming-call", handleIncomingCall);
   };
 }, [currentUserId]);
@@ -540,14 +512,13 @@ useEffect(() => {
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
       {/*shraddha new code start*/}
-    {incomingCall && (
+      {incomingCall && (
   <CallPage
     socket={socket}
     currentUserId={currentUserId}
     targetUserId={incomingCall.from}
-    incomingOffer={incomingCall.outgoing ? null : incomingCall.offer}
+    incomingOffer={incomingCall.offer}
     callType={incomingCall.callType}
-    autoStart={incomingCall.outgoing}
     onClose={() => setIncomingCall(null)}
   />
 )} {/*shraddha new code end*/}
