@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { chatApi } from "../services/chatApi";
-import io from "socket.io-client";
+import socket from "../services/socketService";
 import { useLocation } from "react-router-dom";
 //shraddha new code
 import CallPage from "../Call/CallPage";//end
@@ -300,107 +300,76 @@ const [showCall, setShowCall] = useState(false);//end
     };
   }, [showImageModal]);
 
-  // SOCKET WITH REACTION HANDLING
   useEffect(() => {
-    if (!currentUserId) return;
+  if (!currentUserId) return;
 
-    console.log("🔌 Initializing socket for user:", currentUserId);
+  socketRef.current = socket;
 
-    if (socketRef.current) {
-      socketRef.current.disconnect();
-    }
-
-    const socket = io(API_BASE_URL, {
-      transports: ["websocket"],
-      reconnection: true,
-      reconnectionAttempts: 5,
-    });
-    socketRef.current = socket;
-
-socket.on("connect", () => {
-  console.log("Socket connected");
-  setSocketConnected(true);
-
-  if (currentUserId) {
+  const handleConnect = () => {
+    console.log("Socket connected");
     socket.emit("register_user", currentUserId.toString());
-    console.log("Registering user:", currentUserId);
-  }
-});
+  };
 
+  const handleDisconnect = () => {
+    console.log("Socket disconnected");
+  };
 
+  const handleIncomingMessage = (message) => {
+    fetchRecentChats();
 
-    socket.on("disconnect", () => {
-      console.log("❌ Socket disconnected");
-      setSocketConnected(false);
-    });
+    if (!selectedUser) return;
 
-    // HANDLE NEW REACTIONS VIA SOCKET
-    socket.on("new_reaction", (reactionData) => {
-      console.log(" New reaction received via socket:", reactionData);
-      if (reactionData && selectedUser) {
-        setReactions((prev) => {
-          const exists = prev.some(
-            (r) =>
-              r.id === reactionData.id ||
-              (r.message_id === reactionData.message_id &&
-                r.user_id === reactionData.user_id),
-          );
-          if (exists) {
-            return prev.map((r) =>
-              r.message_id === reactionData.message_id &&
-              r.user_id === reactionData.user_id
-                ? reactionData
-                : r,
-            );
-          }
-          return [...prev, reactionData];
-        });
+    const isRelevant =
+      (message.sender_id === currentUserId &&
+        message.receiver_id === selectedUser.id) ||
+      (message.sender_id === selectedUser.id &&
+        message.receiver_id === currentUserId);
+
+    if (isRelevant) {
+      setMessages((prev) => {
+        const exists = prev.some((m) => m.id === message.id);
+        if (exists) return prev;
+        return [...prev, message];
+      });
+    }
+  };
+
+  const handleReaction = (reactionData) => {
+    if (!reactionData) return;
+
+    setReactions((prev) => {
+      const exists = prev.some(
+        (r) =>
+          r.id === reactionData.id ||
+          (r.message_id === reactionData.message_id &&
+            r.user_id === reactionData.user_id)
+      );
+
+      if (exists) {
+        return prev.map((r) =>
+          r.message_id === reactionData.message_id &&
+          r.user_id === reactionData.user_id
+            ? reactionData
+            : r
+        );
       }
+
+      return [...prev, reactionData];
     });
+  };
 
-    // Handle incoming messages
-    const handleIncomingMessage = (message) => {
-      console.log("📩 Socket message received:", message);
-      fetchRecentChats();
+  socket.on("connect", handleConnect);
+  socket.on("disconnect", handleDisconnect);
+  socket.on("new_message", handleIncomingMessage);
+  socket.on("new_reaction", handleReaction);
 
-      if (!selectedUser) return;
-
-      const isRelevant =
-        (message.sender_id === currentUserId &&
-          message.receiver_id === selectedUser.id) ||
-        (message.sender_id === selectedUser.id &&
-          message.receiver_id === currentUserId);
-
-      if (isRelevant) {
-        setMessages((prev) => {
-          const exists = prev.some((m) => m.id === message.id);
-          if (exists) return prev;
-
-          const filtered = prev.filter(
-            (m) =>
-              !m.isTemporary ||
-              (m.isTemporary && m.content !== message.content),
-          );
-
-          return [...filtered, message];
-        });
-      }
-    };
-
-    socket.on("new_message", handleIncomingMessage);
-    //shraddha new code
-    // ✅ INCOMING  LISTENER ADD HERE
-
-
-//end
-
-    return () => {
-      socket.off("new_message", handleIncomingMessage);
-      socket.off("new_reaction");
-      
-      socket.disconnect();
-    };
-  }, [currentUserId]);
+  return () => {
+    socket.off("connect", handleConnect);
+    socket.off("disconnect", handleDisconnect);
+    socket.off("new_message", handleIncomingMessage);
+    socket.off("new_reaction", handleReaction);
+  };
+}, [currentUserId, selectedUser]);
 
   // Auto-scroll
   useEffect(() => {
