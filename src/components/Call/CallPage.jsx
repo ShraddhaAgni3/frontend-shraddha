@@ -13,6 +13,7 @@ export default function VideoCall({
   const peerConnection = useRef(null);
   const otherUserRef = useRef(null);
   const pendingCandidates = useRef([]);
+  const remoteStreamRef = useRef(new MediaStream());
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -24,6 +25,8 @@ export default function VideoCall({
   const [callDuration, setCallDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
+
+  /* ================= ICE CONFIG ================= */
 
   const iceConfig = {
     iceServers: [
@@ -48,7 +51,7 @@ export default function VideoCall({
     peerConnection.current = new RTCPeerConnection(iceConfig);
 
     peerConnection.current.onicecandidate = (event) => {
-      if (event.candidate && socket && otherUserRef.current) {
+      if (event.candidate && otherUserRef.current) {
         socket.emit("ice-candidate", {
           to: otherUserRef.current.toString(),
           candidate: event.candidate
@@ -56,18 +59,17 @@ export default function VideoCall({
       }
     };
 
+    // 🔥 FINAL FIXED ontrack
     peerConnection.current.ontrack = (event) => {
-      const stream = event.streams[0];
-      if (!stream) return;
+      console.log("Track received:", event.track.kind);
 
-      console.log("Remote tracks:", stream.getTracks());
+      remoteStreamRef.current.addTrack(event.track);
 
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = stream;
+      if (remoteVideoRef.current && !remoteVideoRef.current.srcObject) {
+        remoteVideoRef.current.srcObject = remoteStreamRef.current;
 
-        // force play (fix autoplay block)
-        remoteVideoRef.current.play().catch(e => {
-          console.log("Autoplay blocked:", e);
+        remoteVideoRef.current.play().catch(err => {
+          console.log("Autoplay prevented:", err);
         });
       }
     };
@@ -77,7 +79,7 @@ export default function VideoCall({
     };
   };
 
-  /* ================= ATTACH LOCAL STREAM ================= */
+  /* ================= LOCAL STREAM ATTACH ================= */
 
   useEffect(() => {
     if (localStream && localVideoRef.current) {
@@ -241,6 +243,7 @@ export default function VideoCall({
   /* ================= CLEANUP ================= */
 
   const cleanupCall = () => {
+
     if (peerConnection.current) {
       peerConnection.current.close();
       peerConnection.current = null;
@@ -250,6 +253,8 @@ export default function VideoCall({
 
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+
+    remoteStreamRef.current = new MediaStream(); // 🔥 reset remote stream
 
     pendingCandidates.current = [];
     otherUserRef.current = null;
