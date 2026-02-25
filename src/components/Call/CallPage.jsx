@@ -10,10 +10,9 @@ export default function VideoCall({
   onClose
 }) {
 
-  const otherUserRef = useRef(null);
   const peerConnection = useRef(null);
+  const otherUserRef = useRef(null);
   const pendingCandidates = useRef([]);
-  const remoteStreamRef = useRef(new MediaStream());
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -59,35 +58,23 @@ export default function VideoCall({
       }
     };
 
-   peerConnection.current.ontrack = (event) => {
-  console.log("Remote track received:", event.streams);
+    peerConnection.current.ontrack = (event) => {
+      console.log("Remote track received:", event.streams);
 
-  if (!remoteVideoRef.current) return;
-
-  remoteVideoRef.current.srcObject = event.streams[0];
-};
-
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = remoteStreamRef.current;
+      if (remoteVideoRef.current && event.streams[0]) {
+        remoteVideoRef.current.srcObject = event.streams[0];
       }
     };
 
     peerConnection.current.onconnectionstatechange = () => {
-      const state = peerConnection.current.connectionState;
-      console.log("Connection State:", state);
-
-      if (state === "failed" || state === "disconnected") {
-        cleanupCall();
-      }
+      console.log("Connection State:", peerConnection.current.connectionState);
     };
   };
 
-  /* ================= ATTACH LOCAL STREAM SAFELY ================= */
+  /* ================= ATTACH LOCAL STREAM ================= */
 
   useEffect(() => {
-    if (!localStream) return;
-
-    if (localVideoRef.current) {
+    if (localStream && localVideoRef.current) {
       localVideoRef.current.srcObject = localStream;
     }
   }, [localStream]);
@@ -109,9 +96,9 @@ export default function VideoCall({
 
       setLocalStream(stream);
 
-      stream.getTracks().forEach(track => {
-        peerConnection.current.addTrack(track, stream);
-      });
+      stream.getTracks().forEach(track =>
+        peerConnection.current.addTrack(track, stream)
+      );
 
       const offer = await peerConnection.current.createOffer();
       await peerConnection.current.setLocalDescription(offer);
@@ -123,8 +110,8 @@ export default function VideoCall({
         callType: type
       });
 
-    } catch (error) {
-      console.error("Start call error:", error);
+    } catch (err) {
+      console.error("Start call error:", err);
     }
   };
 
@@ -133,6 +120,7 @@ export default function VideoCall({
   const acceptCall = async () => {
     try {
       createPeerConnection();
+
       otherUserRef.current = incomingData.from;
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -142,16 +130,18 @@ export default function VideoCall({
 
       setLocalStream(stream);
 
-      stream.getTracks().forEach(track => {
-        peerConnection.current.addTrack(track, stream);
-      });
+      stream.getTracks().forEach(track =>
+        peerConnection.current.addTrack(track, stream)
+      );
 
       await peerConnection.current.setRemoteDescription(
         new RTCSessionDescription(incomingData.offer)
       );
 
       for (const c of pendingCandidates.current) {
-        await peerConnection.current.addIceCandidate(new RTCIceCandidate(c));
+        await peerConnection.current.addIceCandidate(
+          new RTCIceCandidate(c)
+        );
       }
 
       pendingCandidates.current = [];
@@ -166,8 +156,8 @@ export default function VideoCall({
 
       setCallStatus("connected");
 
-    } catch (error) {
-      console.error("Accept call error:", error);
+    } catch (err) {
+      console.error("Accept call error:", err);
     }
   };
 
@@ -184,7 +174,9 @@ export default function VideoCall({
       );
 
       for (const c of pendingCandidates.current) {
-        await peerConnection.current.addIceCandidate(new RTCIceCandidate(c));
+        await peerConnection.current.addIceCandidate(
+          new RTCIceCandidate(c)
+        );
       }
 
       pendingCandidates.current = [];
@@ -221,7 +213,7 @@ export default function VideoCall({
 
   }, [socket]);
 
-  /* ================= INCOMING CALL ================= */
+  /* ================= INCOMING ================= */
 
   useEffect(() => {
     if (incomingOffer) {
@@ -268,8 +260,6 @@ export default function VideoCall({
     if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = null;
     }
-
-    remoteStreamRef.current = new MediaStream();
 
     pendingCandidates.current = [];
     otherUserRef.current = null;
