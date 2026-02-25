@@ -94,6 +94,24 @@ export default function App() {
   //shraddha new code start
   const [incomingCall, setIncomingCall] = useState(null);
 const [currentUserId, setCurrentUserId] = useState(null);
+  useEffect(() => {
+  const handleStartCall = (e) => {
+    const { targetId, callType } = e.detail;
+
+    setIncomingCall({
+      offer: null,
+      from: targetId,
+      callType,
+      outgoing: true,
+    });
+  };
+
+  window.addEventListener("start-call", handleStartCall);
+
+  return () => {
+    window.removeEventListener("start-call", handleStartCall);
+  };
+}, []);
 useEffect(() => {
   const storedUser = localStorage.getItem("currentUser");
   if (storedUser) {
@@ -522,13 +540,14 @@ useEffect(() => {
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
       {/*shraddha new code start*/}
-      {incomingCall && (
+    {incomingCall && (
   <CallPage
     socket={socket}
     currentUserId={currentUserId}
     targetUserId={incomingCall.from}
-    incomingOffer={incomingCall.offer}
+    incomingOffer={incomingCall.outgoing ? null : incomingCall.offer}
     callType={incomingCall.callType}
+    autoStart={incomingCall.outgoing}
     onClose={() => setIncomingCall(null)}
   />
 )} {/*shraddha new code end*/}
