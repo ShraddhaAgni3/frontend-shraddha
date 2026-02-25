@@ -105,10 +105,19 @@ useEffect(() => {
 useEffect(() => {
   if (!currentUserId) return;
 
-  socket.emit("register_user", currentUserId.toString());
+  const handleConnect = () => {
+    console.log("🔌 Socket Connected - Registering user");
+    socket.emit("register_user", currentUserId.toString());
+  };
+
+  if (socket.connected) {
+    handleConnect();
+  }
+
+  socket.on("connect", handleConnect);
 
   const handleIncomingCall = ({ offer, from, callType }) => {
-    console.log("📞 Global Incoming Call Received");
+    console.log("📞 Global Incoming Call");
 
     setIncomingCall({
       offer,
@@ -120,6 +129,7 @@ useEffect(() => {
   socket.on("incoming-call", handleIncomingCall);
 
   return () => {
+    socket.off("connect", handleConnect);
     socket.off("incoming-call", handleIncomingCall);
   };
 }, [currentUserId]);
