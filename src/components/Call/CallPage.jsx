@@ -26,8 +26,6 @@ export default function VideoCall({
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
 
-  /* ================= ICE CONFIG ================= */
-
   const iceConfig = {
     iceServers: [
       { urls: "stun:stun.relay.metered.ca:80" },
@@ -59,18 +57,13 @@ export default function VideoCall({
       }
     };
 
-    // 🔥 FINAL FIXED ontrack
     peerConnection.current.ontrack = (event) => {
-      console.log("Track received:", event.track.kind);
-
       remoteStreamRef.current.addTrack(event.track);
 
       if (remoteVideoRef.current && !remoteVideoRef.current.srcObject) {
         remoteVideoRef.current.srcObject = remoteStreamRef.current;
 
-        remoteVideoRef.current.play().catch(err => {
-          console.log("Autoplay prevented:", err);
-        });
+        remoteVideoRef.current.play().catch(() => {});
       }
     };
 
@@ -79,7 +72,7 @@ export default function VideoCall({
     };
   };
 
-  /* ================= LOCAL STREAM ATTACH ================= */
+  /* ================= LOCAL STREAM ================= */
 
   useEffect(() => {
     if (localStream && localVideoRef.current) {
@@ -145,14 +138,6 @@ export default function VideoCall({
         new RTCSessionDescription(incomingData.offer)
       );
 
-      for (const c of pendingCandidates.current) {
-        await peerConnection.current.addIceCandidate(
-          new RTCIceCandidate(c)
-        );
-      }
-
-      pendingCandidates.current = [];
-
       const answer = await peerConnection.current.createAnswer();
       await peerConnection.current.setLocalDescription(answer);
 
@@ -185,11 +170,6 @@ export default function VideoCall({
 
     const handleIce = async ({ candidate }) => {
       if (!peerConnection.current) return;
-
-      if (!peerConnection.current.remoteDescription) {
-        pendingCandidates.current.push(candidate);
-        return;
-      }
 
       await peerConnection.current.addIceCandidate(
         new RTCIceCandidate(candidate)
@@ -228,18 +208,6 @@ export default function VideoCall({
     }
   }, [incomingOffer]);
 
-  /* ================= TIMER ================= */
-
-  useEffect(() => {
-    let interval;
-    if (callStatus === "connected") {
-      interval = setInterval(() => {
-        setCallDuration(prev => prev + 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [callStatus]);
-
   /* ================= CLEANUP ================= */
 
   const cleanupCall = () => {
@@ -254,18 +222,18 @@ export default function VideoCall({
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
 
-    remoteStreamRef.current = new MediaStream(); // 🔥 reset remote stream
+    remoteStreamRef.current = new MediaStream();
 
-    pendingCandidates.current = [];
-    otherUserRef.current = null;
     setLocalStream(null);
     setIncomingData(null);
-    setCallDuration(0);
     setCallStatus("idle");
+    setCallDuration(0);
   };
 
   const endCall = () => {
-    socket.emit("end-call", { to: otherUserRef.current });
+    if (otherUserRef.current) {
+      socket.emit("end-call", { to: otherUserRef.current.toString() });
+    }
     cleanupCall();
     onClose();
   };
