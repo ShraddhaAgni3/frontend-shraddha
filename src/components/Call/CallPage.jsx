@@ -13,6 +13,7 @@ export default function VideoCall({
   const otherUserRef = useRef(null);
   const peerConnection = useRef(null);
   const pendingCandidates = useRef([]);
+  const remoteStreamRef = useRef(new MediaStream());
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -25,20 +26,13 @@ export default function VideoCall({
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
 
-  /* ================= ICE CONFIG (METERED TURN) ================= */
+  /* ================= ICE CONFIG ================= */
 
   const iceConfig = {
     iceServers: [
-      {
-        urls: "stun:stun.relay.metered.ca:80",
-      },
+      { urls: "stun:stun.relay.metered.ca:80" },
       {
         urls: "turn:global.relay.metered.ca:80",
-        username: "a276c28a894e22e6e9b400c1",
-        credential: "QlDSTWza3xkHHWZe",
-      },
-      {
-        urls: "turn:global.relay.metered.ca:80?transport=tcp",
         username: "a276c28a894e22e6e9b400c1",
         credential: "QlDSTWza3xkHHWZe",
       },
@@ -47,123 +41,131 @@ export default function VideoCall({
         username: "a276c28a894e22e6e9b400c1",
         credential: "QlDSTWza3xkHHWZe",
       },
-      {
-        urls: "turns:global.relay.metered.ca:443?transport=tcp",
-        username: "a276c28a894e22e6e9b400c1",
-        credential: "QlDSTWza3xkHHWZe",
-      },
     ],
   };
 
-  /* ================= PEER CONNECTION ================= */
+  /* ================= CREATE PEER ================= */
 
   const createPeerConnection = () => {
 
     peerConnection.current = new RTCPeerConnection(iceConfig);
 
-    peerConnection.current.oniceconnectionstatechange = () => {
-      const state = peerConnection.current.iceConnectionState;
-      console.log("ICE STATE:", state);
+    peerConnection.current.onicecandidate = (event) => {
+      if (event.candidate && socket && otherUserRef.current) {
+        socket.emit("ice-candidate", {
+          to: otherUserRef.current.toString(),
+          candidate: event.candidate
+        });
+      }
+    };
 
-      if (state === "failed" || state === "disconnected") {
-        console.log("Restarting ICE...");
-        peerConnection.current.restartIce();
+    peerConnection.current.ontrack = (event) => {
+      event.streams[0].getTracks().forEach(track => {
+        remoteStreamRef.current.addTrack(track);
+      });
+
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = remoteStreamRef.current;
       }
     };
 
     peerConnection.current.onconnectionstatechange = () => {
-      console.log("CONNECTION STATE:", peerConnection.current.connectionState);
-    };
+      const state = peerConnection.current.connectionState;
+      console.log("Connection State:", state);
 
-    peerConnection.current.onicecandidate = (event) => {
-      if (!event.candidate || !socket || !otherUserRef.current) return;
-
-      socket.emit("ice-candidate", {
-        to: otherUserRef.current.toString(),
-        candidate: event.candidate
-      });
-    };
-
-    peerConnection.current.ontrack = (event) => {
-      if (!remoteVideoRef.current.srcObject) {
-        remoteVideoRef.current.srcObject = new MediaStream();
+      if (state === "failed" || state === "disconnected") {
+        cleanupCall();
       }
-      remoteVideoRef.current.srcObject.addTrack(event.track);
     };
   };
+
+  /* ================= ATTACH LOCAL STREAM SAFELY ================= */
+
+  useEffect(() => {
+    if (!localStream) return;
+
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream]);
 
   /* ================= START CALL ================= */
 
   const startCall = async (type = "video") => {
+    try {
+      createPeerConnection();
 
-    createPeerConnection();
+      setCallType(type);
+      setCallStatus("calling");
+      otherUserRef.current = targetUserId;
 
-    setCallType(type);
-    setCallStatus("calling");
-    otherUserRef.current = targetUserId;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: type === "video",
+        audio: true
+      });
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: type === "video",
-      audio: true
-    });
+      setLocalStream(stream);
 
-    setLocalStream(stream);
-    localVideoRef.current.srcObject = stream;
+      stream.getTracks().forEach(track => {
+        peerConnection.current.addTrack(track, stream);
+      });
 
-    stream.getTracks().forEach(track =>
-      peerConnection.current.addTrack(track, stream)
-    );
+      const offer = await peerConnection.current.createOffer();
+      await peerConnection.current.setLocalDescription(offer);
 
-    const offer = await peerConnection.current.createOffer();
-    await peerConnection.current.setLocalDescription(offer);
+      socket.emit("call-user", {
+        to: targetUserId.toString(),
+        from: currentUserId.toString(),
+        offer,
+        callType: type
+      });
 
-    socket.emit("call-user", {
-      to: targetUserId.toString(),
-      from: currentUserId.toString(),
-      offer,
-      callType: type
-    });
+    } catch (error) {
+      console.error("Start call error:", error);
+    }
   };
 
   /* ================= ACCEPT CALL ================= */
 
   const acceptCall = async () => {
+    try {
+      createPeerConnection();
+      otherUserRef.current = incomingData.from;
 
-    createPeerConnection();
-    otherUserRef.current = incomingData.from;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: callType === "video",
+        audio: true
+      });
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: callType === "video",
-      audio: true
-    });
+      setLocalStream(stream);
 
-    setLocalStream(stream);
-    localVideoRef.current.srcObject = stream;
+      stream.getTracks().forEach(track => {
+        peerConnection.current.addTrack(track, stream);
+      });
 
-    stream.getTracks().forEach(track =>
-      peerConnection.current.addTrack(track, stream)
-    );
-
-    await peerConnection.current.setRemoteDescription(
-      new RTCSessionDescription(incomingData.offer)
-    );
-
-    for (const c of pendingCandidates.current) {
-      await peerConnection.current.addIceCandidate(
-        new RTCIceCandidate(c)
+      await peerConnection.current.setRemoteDescription(
+        new RTCSessionDescription(incomingData.offer)
       );
+
+      for (const c of pendingCandidates.current) {
+        await peerConnection.current.addIceCandidate(new RTCIceCandidate(c));
+      }
+
+      pendingCandidates.current = [];
+
+      const answer = await peerConnection.current.createAnswer();
+      await peerConnection.current.setLocalDescription(answer);
+
+      socket.emit("answer-call", {
+        to: incomingData.from,
+        answer
+      });
+
+      setCallStatus("connected");
+
+    } catch (error) {
+      console.error("Accept call error:", error);
     }
-    pendingCandidates.current = [];
-
-    const answer = await peerConnection.current.createAnswer();
-    await peerConnection.current.setLocalDescription(answer);
-
-    socket.emit("answer-call", {
-      to: incomingData.from,
-      answer
-    });
-
-    setCallStatus("connected");
   };
 
   /* ================= SOCKET LISTENERS ================= */
@@ -179,9 +181,7 @@ export default function VideoCall({
       );
 
       for (const c of pendingCandidates.current) {
-        await peerConnection.current.addIceCandidate(
-          new RTCIceCandidate(c)
-        );
+        await peerConnection.current.addIceCandidate(new RTCIceCandidate(c));
       }
 
       pendingCandidates.current = [];
@@ -254,8 +254,11 @@ export default function VideoCall({
       peerConnection.current = null;
     }
 
-    if (localVideoRef.current?.srcObject) {
-      localVideoRef.current.srcObject.getTracks().forEach(track => track.stop());
+    if (localStream) {
+      localStream.getTracks().forEach(track => track.stop());
+    }
+
+    if (localVideoRef.current) {
       localVideoRef.current.srcObject = null;
     }
 
@@ -263,8 +266,11 @@ export default function VideoCall({
       remoteVideoRef.current.srcObject = null;
     }
 
+    remoteStreamRef.current = new MediaStream();
+
     pendingCandidates.current = [];
     otherUserRef.current = null;
+    setLocalStream(null);
     setIncomingData(null);
     setCallDuration(0);
     setCallStatus("idle");
