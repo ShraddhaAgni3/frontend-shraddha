@@ -153,59 +153,59 @@ export default function VideoCall({
   };
 
   /* ================= ACCEPT CALL ================= */
+const acceptCall = async () => {
+  try {
+    if (!incomingData) {
+      console.log("No incoming data");
+      return;
+    }
 
-  const acceptCall = async () => {
-    try {
-      createPeerConnection();
-      otherUserRef.current = incomingData.from;
+    createPeerConnection();
+    otherUserRef.current = incomingData.from;
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: callType === "video",
-        audio: true
-      });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: callType === "video",
+      audio: true
+    });
 
-      setLocalStream(stream);
+    setLocalStream(stream);
 
-      stream.getTracks().forEach(track =>
-        peerConnection.current.addTrack(track, stream)
-      );
+    stream.getTracks().forEach(track =>
+      peerConnection.current.addTrack(track, stream)
+    );
 
+    // Only set offer if signalingState is stable
+    if (peerConnection.current.signalingState === "stable") {
       await peerConnection.current.setRemoteDescription(
         new RTCSessionDescription(incomingData.offer)
       );
-
-      // Apply buffered ICE
-      pendingCandidates.current.forEach(candidate => {
-        peerConnection.current.addIceCandidate(
-          new RTCIceCandidate(candidate)
-        );
-      });
-      pendingCandidates.current = [];
-
-      const answer = await peerConnection.current.createAnswer();
-      await peerConnection.current.setLocalDescription(answer);
-
-      socket.emit("answer-call", {
-        to: incomingData.from,
-        answer
-      });
-
-    } catch (err) {
-      console.error("Accept call error:", err);
     }
-  };
+
+    const answer = await peerConnection.current.createAnswer();
+    await peerConnection.current.setLocalDescription(answer);
+
+    socket.emit("answer-call", {
+      to: incomingData.from,
+      answer
+    });
+
+    setCallStatus("connected");
+
+  } catch (err) {
+    console.error("Accept call error:", err);
+  }
+};
 
   /* ================= SOCKET LISTENERS ================= */
 
   useEffect(() => {
     if (!socket) return;
-
-  const handleAnswer = async ({ answer }) => {
+const handleAnswer = async ({ answer }) => {
   if (!peerConnection.current) return;
 
-  // Only caller should receive answer
+  // Only caller should set remote answer
   if (peerConnection.current.signalingState !== "have-local-offer") {
-    console.log("Ignoring duplicate or invalid answer");
+    console.log("Answer ignored - wrong state");
     return;
   }
 
@@ -214,7 +214,6 @@ export default function VideoCall({
       new RTCSessionDescription(answer)
     );
 
-    // Apply buffered ICE
     pendingCandidates.current.forEach(candidate => {
       peerConnection.current.addIceCandidate(
         new RTCIceCandidate(candidate)
@@ -223,7 +222,7 @@ export default function VideoCall({
     pendingCandidates.current = [];
 
   } catch (err) {
-    console.error("Answer set error:", err);
+    console.error("Error setting answer:", err);
   }
 };
 
