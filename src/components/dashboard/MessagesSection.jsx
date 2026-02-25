@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { chatApi } from "../services/chatApi";
-import socket from "../services/socketService";
+import io from "socket.io-client";
 import { useLocation } from "react-router-dom";
 //shraddha new code
 import CallPage from "../Call/CallPage";//end
@@ -20,7 +20,7 @@ export default function MessagesSection() {
   const [callData, setCallData] = useState(null);
 const [showCall, setShowCall] = useState(false);//end
 
-const [callTargetId, setCallTargetId] = useState(null);
+
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -54,6 +54,7 @@ const [callTargetId, setCallTargetId] = useState(null);
     daysLeft: 0,
   });
 
+  const socketRef = useRef(null);
   const fileInputRef = useRef();
   const messagesEndRef = useRef();
   const [socketConnected, setSocketConnected] = useState(false);
@@ -157,31 +158,33 @@ const [callTargetId, setCallTargetId] = useState(null);
   }, [location.state, currentUserId]);
 
   // Fetch recent chats
- // ✅ ADD HERE (same position where old function was)
-const fetchRecentChats = useCallback(async () => {
-  if (!currentUserId) return;
+  const fetchRecentChats = async () => {
+    try {
+      setRecentChatsLoading(true);
+      const response = await chatApi.getRecentChats(currentUserId);
+      setRecentChats(response.data);
 
-  try {
-    setRecentChatsLoading(true);
-    const response = await chatApi.getRecentChats(currentUserId);
-    setRecentChats(response.data);
-
-    // 👇 keep auto-select logic
-    if (response.data && response.data.length > 0 && !selectedUser) {
-      const firstChat = response.data[0];
-      handleUserSelect({
-        id: firstChat.user_id,
-        name: firstChat.name,
-        email: firstChat.email,
-        profile_picture_url: firstChat.profile_picture_url,
-      });
+      // AUTO-SELECT FIRST RECENT CHAT IF NO USER IS SELECTED
+      if (response.data && response.data.length > 0 && !selectedUser) {
+        const firstChat = response.data[0];
+        const user = {
+          id: firstChat.user_id,
+          name: firstChat.name,
+          email: firstChat.email,
+          profile_picture_url: firstChat.profile_picture_url
+          
+        };
+        // Small delay to ensure state is set
+        setTimeout(() => {
+          handleUserSelect(user);
+        }, 100);
+      }
+    } catch (error) {
+      console.error("Error fetching recent chats:", error);
+    } finally {
+      setRecentChatsLoading(false);
     }
-  } catch (error) {
-    console.error("Error fetching recent chats:", error);
-  } finally {
-    setRecentChatsLoading(false);
-  }
-}, [currentUserId, selectedUser]);
+  };
 
   // Handle recent chat selection
   const handleRecentChatSelect = (chat) => {
@@ -206,11 +209,11 @@ const fetchRecentChats = useCallback(async () => {
   };
 
   // RECENT CHATS USE EFFECT
- useEffect(() => {
-  if (currentUserId) {
-    fetchRecentChats();
-  }
-}, [currentUserId, fetchRecentChats]);
+  useEffect(() => {
+    if (currentUserId) {
+      fetchRecentChats();
+    }
+  }, [currentUserId]);
 
   // Click outside to close reaction picker and delete option
   useEffect(() => {
@@ -297,87 +300,117 @@ const fetchRecentChats = useCallback(async () => {
     };
   }, [showImageModal]);
 
+  // SOCKET WITH REACTION HANDLING
+  useEffect(() => {
+    if (!currentUserId) return;
 
+    console.log("🔌 Initializing socket for user:", currentUserId);
 
-useEffect(() => {
-  if (!currentUserId) return;
-
-  console.log("🔌 Registering socket for:", currentUserId);
-
-  socket.emit("register_user", currentUserId.toString());
-
-  const handleReaction = (reactionData) => {
-    if (!reactionData) return;
-
-    setReactions((prev) => {
-      const exists = prev.some(
-        (r) =>
-          r.id === reactionData.id ||
-          (r.message_id === reactionData.message_id &&
-            r.user_id === reactionData.user_id)
-      );
-
-      if (exists) {
-        return prev.map((r) =>
-          r.message_id === reactionData.message_id &&
-          r.user_id === reactionData.user_id
-            ? reactionData
-            : r
-        );
-      }
-
-      return [...prev, reactionData];
-    });
-  };
-
-  const handleIncomingMessage = (message) => {
-    fetchRecentChats();
-
-    if (!selectedUser) return;
-
-    const isRelevant =
-      (message.sender_id === currentUserId &&
-        message.receiver_id === selectedUser.id) ||
-      (message.sender_id === selectedUser.id &&
-        message.receiver_id === currentUserId);
-
-    if (isRelevant) {
-      setMessages((prev) => {
-        const exists = prev.some((m) => m.id === message.id);
-        if (exists) return prev;
-        return [...prev, message];
-      });
+    if (socketRef.current) {
+      socketRef.current.disconnect();
     }
-  };
 
-const handleIncomingCall = ({ offer, from, callType }) => {
-  if (!socket || !socket.connected) {
-    console.warn("⚠️ Incoming call but socket not connected");
-    return;
+    const socket = io(API_BASE_URL, {
+      transports: ["websocket"],
+      reconnection: true,
+      reconnectionAttempts: 5,
+    });
+    socketRef.current = socket;
+
+socket.on("connect", () => {
+  console.log("Socket connected");
+  setSocketConnected(true);
+
+  if (currentUserId) {
+    socket.emit("register_user", currentUserId.toString());
+    console.log("Registering user:", currentUserId);
   }
+});
 
-  // already on call
-  if (showCall) {
-    socket.emit("end-call", { to: from });
-    return;
-  }
 
-  setCallTargetId(from);
-  setCallData({ offer, callType });
+
+    socket.on("disconnect", () => {
+      console.log("❌ Socket disconnected");
+      setSocketConnected(false);
+    });
+
+    // HANDLE NEW REACTIONS VIA SOCKET
+    socket.on("new_reaction", (reactionData) => {
+      console.log(" New reaction received via socket:", reactionData);
+      if (reactionData && selectedUser) {
+        setReactions((prev) => {
+          const exists = prev.some(
+            (r) =>
+              r.id === reactionData.id ||
+              (r.message_id === reactionData.message_id &&
+                r.user_id === reactionData.user_id),
+          );
+          if (exists) {
+            return prev.map((r) =>
+              r.message_id === reactionData.message_id &&
+              r.user_id === reactionData.user_id
+                ? reactionData
+                : r,
+            );
+          }
+          return [...prev, reactionData];
+        });
+      }
+    });
+
+    // Handle incoming messages
+    const handleIncomingMessage = (message) => {
+      console.log("📩 Socket message received:", message);
+      fetchRecentChats();
+
+      if (!selectedUser) return;
+
+      const isRelevant =
+        (message.sender_id === currentUserId &&
+          message.receiver_id === selectedUser.id) ||
+        (message.sender_id === selectedUser.id &&
+          message.receiver_id === currentUserId);
+
+      if (isRelevant) {
+        setMessages((prev) => {
+          const exists = prev.some((m) => m.id === message.id);
+          if (exists) return prev;
+
+          const filtered = prev.filter(
+            (m) =>
+              !m.isTemporary ||
+              (m.isTemporary && m.content !== message.content),
+          );
+
+          return [...filtered, message];
+        });
+      }
+    };
+
+    socket.on("new_message", handleIncomingMessage);
+    //shraddha new code
+    // ✅ INCOMING  LISTENER ADD HERE
+socket.on("incoming-call", ({ offer, from, callType }) => {
+  console.log("📞 Incoming call from:", from);
+
+  setCallData({
+    offer,
+    from,
+    callType
+  });
+
   setShowCall(true);
-};
+});
 
-  // ✅ IMPORTANT — REGISTER LISTENERS
-  socket.on("new_reaction", handleReaction);
-  socket.on("new_message", handleIncomingMessage);
-  socket.on("incoming-call", handleIncomingCall);
+//end
 
-  return () => {
-    socket.off("new_reaction", handleReaction);
-    socket.off("new_message", handleIncomingMessage);
-    socket.off("incoming-call", handleIncomingCall);
-  };
-}, [currentUserId]);
+    return () => {
+      socket.off("new_message", handleIncomingMessage);
+      socket.off("new_reaction");
+      socket.off("incoming-call"); //shraddha new code
+      socket.disconnect();
+    };
+  }, [currentUserId]);
 
   // Auto-scroll
   useEffect(() => {
@@ -665,9 +698,10 @@ const handleIncomingCall = ({ offer, from, callType }) => {
         }, 500);
       }
 
-      if (response.data) {
-  socket.emit("send_reaction", response.data);
-}
+      if (socketRef.current && response.data) {
+        socketRef.current.emit("send_reaction", response.data);
+      }
+
       setShowReactionPicker(null);
     } catch (err) {
       console.error("❌ Reaction failed:", err);
@@ -688,7 +722,12 @@ const handleIncomingCall = ({ offer, from, callType }) => {
     return messageReactions;
   };
 
-  
+  // RECONNECT SOCKET
+  const reconnectSocket = () => {
+    if (socketRef.current) {
+      socketRef.current.connect();
+    }
+  };
 
   // FILE UPLOAD
   const handleFileUpload = async (file) => {
@@ -859,22 +898,17 @@ const handleIncomingCall = ({ offer, from, callType }) => {
     <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
       <h2 className="text-2xl font-bold text-gray-800 mb-6">Messages</h2>
        {/* shraddha new code */}
-{showCall && callTargetId && (
+{showCall && (
   <CallPage
-    socket={socket}
+    socket={socketRef.current}
     currentUserId={currentUserId}
-    targetUserId={callTargetId}   // 🔥 always correct
-    incomingOffer={callData?.offer || null}
-    callType={callData?.callType || "video"}
+    targetUserId={callData?.from || selectedUser?.id}
+    incomingOffer={callData?.offer}
+    callType={callData?.callType}
     onClose={() => {
-  if (socket?.connected && callTargetId) {
-    socket.emit("end-call", { to: callTargetId });
-  }
-
-  setShowCall(false);
-  setCallData(null);
-  setCallTargetId(null);
-}}
+      setShowCall(false);
+      setCallData(null);
+    }}
   />
 )}
  {/* shraddha new code end */}
@@ -1147,23 +1181,16 @@ const handleIncomingCall = ({ offer, from, callType }) => {
               <div className="hidden md:flex p-4 border-b border-gray-200 bg-white items-center gap-3">
                 {/*  PROFILE PICTURE WITH FALLBACK */}
                 {/* shraddha new code */}
-           <button
+               <button
   onClick={() => {
-    if (!socket?.connected) {
-      console.warn("Socket not ready yet");
-      alert("Connection not ready, please wait...");
-      return;
-    }
-
-    if (!selectedUser?.id) return;
-
-    setCallTargetId(selectedUser.id);
     setCallData({
+      from: selectedUser?.id,
       offer: null,
-      callType: "video",
+      callType: "video"
     });
     setShowCall(true);
   }}
+  className="ml-auto px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
 >
   📞 Call
 </button>
@@ -1509,32 +1536,3 @@ const handleIncomingCall = ({ offer, from, callType }) => {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
