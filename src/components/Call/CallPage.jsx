@@ -25,8 +25,6 @@ export default function VideoCall({
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
 
-  /* ================= ICE CONFIG ================= */
-
   const iceConfig = {
     iceServers: [
       { urls: "stun:stun.relay.metered.ca:80" },
@@ -59,10 +57,18 @@ export default function VideoCall({
     };
 
     peerConnection.current.ontrack = (event) => {
-      console.log("Remote track received:", event.streams);
+      const stream = event.streams[0];
+      if (!stream) return;
 
-      if (remoteVideoRef.current && event.streams[0]) {
-        remoteVideoRef.current.srcObject = event.streams[0];
+      console.log("Remote tracks:", stream.getTracks());
+
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = stream;
+
+        // force play (fix autoplay block)
+        remoteVideoRef.current.play().catch(e => {
+          console.log("Autoplay blocked:", e);
+        });
       }
     };
 
@@ -120,7 +126,6 @@ export default function VideoCall({
   const acceptCall = async () => {
     try {
       createPeerConnection();
-
       otherUserRef.current = incomingData.from;
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -173,13 +178,6 @@ export default function VideoCall({
         new RTCSessionDescription(answer)
       );
 
-      for (const c of pendingCandidates.current) {
-        await peerConnection.current.addIceCandidate(
-          new RTCIceCandidate(c)
-        );
-      }
-
-      pendingCandidates.current = [];
       setCallStatus("connected");
     };
 
@@ -243,23 +241,15 @@ export default function VideoCall({
   /* ================= CLEANUP ================= */
 
   const cleanupCall = () => {
-
     if (peerConnection.current) {
       peerConnection.current.close();
       peerConnection.current = null;
     }
 
-    if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
-    }
+    localStream?.getTracks().forEach(track => track.stop());
 
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = null;
-    }
-
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null;
-    }
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
 
     pendingCandidates.current = [];
     otherUserRef.current = null;
@@ -275,13 +265,7 @@ export default function VideoCall({
     onClose();
   };
 
-  const rejectCall = () => {
-    socket.emit("end-call", { to: otherUserRef.current });
-    cleanupCall();
-    onClose();
-  };
-
-  /* ================= CONTROLS ================= */
+  const rejectCall = endCall;
 
   const toggleMute = () => {
     localStream?.getAudioTracks().forEach(track => {
