@@ -7,13 +7,15 @@ export default function VideoCall({
   targetUserId,
   incomingOffer,
   callType: initialCallType,
+  autoStart = false,
   onClose
 }) {
 
   const peerConnection = useRef(null);
   const otherUserRef = useRef(null);
   const pendingCandidates = useRef([]);
-  const remoteStreamRef = useRef(new MediaStream());
+  const remoteStreamRef = useRef(null);
+  const timerRef = useRef(null);
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -25,6 +27,8 @@ export default function VideoCall({
   const [callDuration, setCallDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
+
+  /* ================= ICE CONFIG ================= */
 
   const iceConfig = {
     iceServers: [
@@ -57,8 +61,10 @@ export default function VideoCall({
   /* ================= CREATE PEER ================= */
 
   const createPeerConnection = () => {
+    if (peerConnection.current) return;
 
     peerConnection.current = new RTCPeerConnection(iceConfig);
+    remoteStreamRef.current = new MediaStream();
 
     peerConnection.current.onicecandidate = (event) => {
       if (event.candidate && otherUserRef.current) {
@@ -70,27 +76,45 @@ export default function VideoCall({
     };
 
     peerConnection.current.ontrack = (event) => {
-      remoteStreamRef.current.addTrack(event.track);
+      event.streams[0].getTracks().forEach(track => {
+        remoteStreamRef.current.addTrack(track);
+      });
 
-      if (remoteVideoRef.current && !remoteVideoRef.current.srcObject) {
+      if (remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = remoteStreamRef.current;
-
-        remoteVideoRef.current.play().catch(() => {});
       }
     };
 
     peerConnection.current.onconnectionstatechange = () => {
-      console.log("Connection State:", peerConnection.current.connectionState);
+      const state = peerConnection.current.connectionState;
+      console.log("Connection State:", state);
+
+      if (state === "connected") {
+        setCallStatus("connected");
+        startTimer();
+      }
+
+      if (state === "failed" || state === "disconnected") {
+        cleanupCall();
+        onClose();
+      }
     };
   };
 
-  /* ================= LOCAL STREAM ================= */
+  /* ================= TIMER ================= */
 
-  useEffect(() => {
-    if (localStream && localVideoRef.current) {
-      localVideoRef.current.srcObject = localStream;
-    }
-  }, [localStream]);
+  const startTimer = () => {
+    if (timerRef.current) return;
+
+    timerRef.current = setInterval(() => {
+      setCallDuration(prev => prev + 1);
+    }, 1000);
+  };
+
+  const stopTimer = () => {
+    clearInterval(timerRef.current);
+    timerRef.current = null;
+  };
 
   /* ================= START CALL ================= */
 
@@ -150,6 +174,14 @@ export default function VideoCall({
         new RTCSessionDescription(incomingData.offer)
       );
 
+      // Apply buffered ICE
+      pendingCandidates.current.forEach(candidate => {
+        peerConnection.current.addIceCandidate(
+          new RTCIceCandidate(candidate)
+        );
+      });
+      pendingCandidates.current = [];
+
       const answer = await peerConnection.current.createAnswer();
       await peerConnection.current.setLocalDescription(answer);
 
@@ -157,8 +189,6 @@ export default function VideoCall({
         to: incomingData.from,
         answer
       });
-
-      setCallStatus("connected");
 
     } catch (err) {
       console.error("Accept call error:", err);
@@ -177,15 +207,25 @@ export default function VideoCall({
         new RTCSessionDescription(answer)
       );
 
-      setCallStatus("connected");
+      // Apply buffered ICE
+      pendingCandidates.current.forEach(candidate => {
+        peerConnection.current.addIceCandidate(
+          new RTCIceCandidate(candidate)
+        );
+      });
+      pendingCandidates.current = [];
     };
 
     const handleIce = async ({ candidate }) => {
       if (!peerConnection.current) return;
 
-      await peerConnection.current.addIceCandidate(
-        new RTCIceCandidate(candidate)
-      );
+      if (peerConnection.current.remoteDescription) {
+        await peerConnection.current.addIceCandidate(
+          new RTCIceCandidate(candidate)
+        );
+      } else {
+        pendingCandidates.current.push(candidate);
+      }
     };
 
     const handleEnd = () => {
@@ -202,7 +242,6 @@ export default function VideoCall({
       socket.off("ice-candidate", handleIce);
       socket.off("call-ended", handleEnd);
     };
-
   }, [socket]);
 
   /* ================= INCOMING ================= */
@@ -220,9 +259,18 @@ export default function VideoCall({
     }
   }, [incomingOffer]);
 
+  /* ================= AUTOSTART ================= */
+
+  useEffect(() => {
+    if (autoStart) {
+      startCall(initialCallType || "video");
+    }
+  }, [autoStart]);
+
   /* ================= CLEANUP ================= */
 
   const cleanupCall = () => {
+    stopTimer();
 
     if (peerConnection.current) {
       peerConnection.current.close();
@@ -234,7 +282,8 @@ export default function VideoCall({
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
 
-    remoteStreamRef.current = new MediaStream();
+    remoteStreamRef.current = null;
+    pendingCandidates.current = [];
 
     setLocalStream(null);
     setIncomingData(null);
@@ -244,7 +293,9 @@ export default function VideoCall({
 
   const endCall = () => {
     if (otherUserRef.current) {
-      socket.emit("end-call", { to: otherUserRef.current.toString() });
+      socket.emit("end-call", {
+        to: otherUserRef.current.toString()
+      });
     }
     cleanupCall();
     onClose();
@@ -269,7 +320,9 @@ export default function VideoCall({
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2,"0")}:${secs.toString().padStart(2,"0")}`;
+    return `${mins.toString().padStart(2, "0")}:${secs
+      .toString()
+      .padStart(2, "0")}`;
   };
 
   return (
