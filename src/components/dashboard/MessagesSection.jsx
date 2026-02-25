@@ -391,14 +391,12 @@ socket.on("connect", () => {
     //shraddha new code
     // ✅ INCOMING  LISTENER ADD HERE
 socket.on("incoming-call", ({ offer, from, callType }) => {
-  console.log("📞 Incoming call from:", from);
-
   setCallData({
+    targetId: from,   // the caller
+    isIncoming: true,
     offer,
-    from,
     callType
   });
-
   setShowCall(true);
 });
 
@@ -898,13 +896,13 @@ socket.on("incoming-call", ({ offer, from, callType }) => {
     <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
       <h2 className="text-2xl font-bold text-gray-800 mb-6">Messages</h2>
        {/* shraddha new code */}
-{showCall && (
+{showCall && callData && (
   <CallPage
     socket={socketRef.current}
     currentUserId={currentUserId}
-    targetUserId={callData?.from || selectedUser?.id}
-    incomingOffer={callData?.offer}
-    callType={callData?.callType}
+    targetUserId={callData.targetId}
+    incomingOffer={callData.isIncoming ? callData.offer : null}
+    callType={callData.callType}
     onClose={() => {
       setShowCall(false);
       setCallData(null);
@@ -1184,13 +1182,14 @@ socket.on("incoming-call", ({ offer, from, callType }) => {
                <button
   onClick={() => {
     setCallData({
-      from: selectedUser?.id,
+      targetId: selectedUser.id,
+      isIncoming: false,
       offer: null,
       callType: "video"
     });
     setShowCall(true);
   }}
-  className="ml-auto px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+  className="ml-auto px-3 py-2 bg-green-500 text-white rounded-lg"
 >
   📞 Call
 </button>
