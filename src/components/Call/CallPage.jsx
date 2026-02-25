@@ -7,10 +7,11 @@ export default function VideoCall({
   targetUserId,
   incomingOffer,
   callType: initialCallType,
-  onClose,
+  onClose
 }) {
-  const peerConnection = useRef(null);
+
   const otherUserRef = useRef(null);
+  const peerConnection = useRef(null);
   const pendingCandidates = useRef([]);
 
   const localVideoRef = useRef(null);
@@ -18,106 +19,79 @@ export default function VideoCall({
 
   const [localStream, setLocalStream] = useState(null);
   const [callStatus, setCallStatus] = useState("idle");
-  const [callType, setCallType] = useState(initialCallType || "video");
+  const [callType, setCallType] = useState("video");
   const [incomingData, setIncomingData] = useState(null);
   const [callDuration, setCallDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
 
-  /* ================= TURN ================= */
+  /* ================= TURN REFRESH ================= */
 
   const refreshTurnServers = async () => {
     const res = await fetch(
       `${import.meta.env.VITE_API_BASE_URL}/api/turn-credentials`
     );
     const data = await res.json();
-    return { iceServers: data.iceServers };
+
+    return {
+      iceServers: data.iceServers
+    };
   };
 
-  /* ================= PEER ================= */
+  /* ================= PEER CONNECTION ================= */
 
   const createPeerConnection = (config) => {
-    if (peerConnection.current) {
-      peerConnection.current.ontrack = null;
-      peerConnection.current.onicecandidate = null;
-      peerConnection.current.close();
-    }
 
     peerConnection.current = new RTCPeerConnection(config);
 
+    peerConnection.current.oniceconnectionstatechange = () => {
+      console.log("ICE STATE:", peerConnection.current.iceConnectionState);
+    };
+
+    peerConnection.current.onconnectionstatechange = () => {
+      console.log("CONNECTION STATE:", peerConnection.current.connectionState);
+    };
+
     peerConnection.current.onicecandidate = (event) => {
-      if (!event.candidate || !otherUserRef.current) return;
+      if (!event.candidate || !socket || !otherUserRef.current) return;
 
       socket.emit("ice-candidate", {
         to: otherUserRef.current.toString(),
-        candidate: event.candidate,
+        candidate: event.candidate
       });
     };
+  
 
     peerConnection.current.ontrack = (event) => {
-      if (!remoteVideoRef.current.srcObject) {
-        remoteVideoRef.current.srcObject = new MediaStream();
-      }
-      remoteVideoRef.current.srcObject.addTrack(event.track);
-    };
+  if (!remoteVideoRef.current.srcObject) {
+    remoteVideoRef.current.srcObject = new MediaStream();
+  }
+
+  remoteVideoRef.current.srcObject.addTrack(event.track);
+};
   };
 
-  /* ================= CLEANUP ================= */
-
-  const cleanupCall = () => {
-    if (peerConnection.current) {
-      peerConnection.current.ontrack = null;
-      peerConnection.current.onicecandidate = null;
-      peerConnection.current.close();
-      peerConnection.current = null;
-    }
-
-    if (localStream) {
-      localStream.getTracks().forEach((t) => t.stop());
-    }
-
-    if (localVideoRef.current) localVideoRef.current.srcObject = null;
-    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-
-    pendingCandidates.current = [];
-    otherUserRef.current = null;
-
-    setLocalStream(null);
-    setIncomingData(null);
-    setCallStatus("idle");
-    setCallDuration(0);
-    setIsMuted(false);
-    setIsCameraOff(false);
-  };
-
-  /* ================= START CALL (CALLER) ================= */
+  /* ================= START CALL ================= */
 
   const startCall = async (type = "video") => {
-    if (!socket?.connected) {
-      console.warn("Socket not ready");
-      return;
-    }
 
-    if (!targetUserId || callStatus !== "idle") return;
+    const iceConfig = await refreshTurnServers();
 
-    const config = await refreshTurnServers();
-    createPeerConnection(config);
-
-    otherUserRef.current = targetUserId;
     setCallType(type);
     setCallStatus("calling");
+    otherUserRef.current = targetUserId;
+
+    createPeerConnection(iceConfig);
 
     const stream = await navigator.mediaDevices.getUserMedia({
       video: type === "video",
-      audio: true,
+      audio: true
     });
 
     setLocalStream(stream);
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = stream;
-    }
+    localVideoRef.current.srcObject = stream;
 
-    stream.getTracks().forEach((track) =>
+    stream.getTracks().forEach(track =>
       peerConnection.current.addTrack(track, stream)
     );
 
@@ -128,37 +102,75 @@ export default function VideoCall({
       to: targetUserId.toString(),
       from: currentUserId.toString(),
       offer,
-      callType: type,
+      callType: type
     });
   };
 
-  /* ================= ACCEPT CALL (RECEIVER) ================= */
+  /* ================= ACCEPT CALL ================= */
+const acceptCall = async () => {
 
-  const acceptCall = async () => {
-    if (!incomingData || callStatus !== "incoming") return;
+  const iceConfig = await refreshTurnServers();
+  createPeerConnection(iceConfig);
 
-    const config = await refreshTurnServers();
-    createPeerConnection(config);
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: callType === "video",
+    audio: true
+  });
 
-    otherUserRef.current = incomingData.from;
-    setCallStatus("connecting");
+  setLocalStream(stream);
+  localVideoRef.current.srcObject = stream;
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: callType === "video",
-      audio: true,
-    });
+  stream.getTracks().forEach(track =>
+    peerConnection.current.addTrack(track, stream)
+  );
 
-    setLocalStream(stream);
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = stream;
-    }
+  // 1️⃣ Set Remote Offer
+  await peerConnection.current.setRemoteDescription(
+    new RTCSessionDescription(incomingData.offer)
+  );
 
-    stream.getTracks().forEach((track) =>
-      peerConnection.current.addTrack(track, stream)
+  // 2️⃣ Flush Pending ICE (IMPORTANT)
+  for (const c of pendingCandidates.current) {
+    await peerConnection.current.addIceCandidate(
+      new RTCIceCandidate(c)
     );
+  }
+  pendingCandidates.current = [];
 
+  // 3️⃣ Create Answer
+  const answer = await peerConnection.current.createAnswer();
+  await peerConnection.current.setLocalDescription(answer);
+
+  // 4️⃣ Send Answer
+  socket.emit("answer-call", {
+    to: incomingData.from,
+    answer
+  });
+
+  setCallStatus("connected");
+};
+
+  /* ================= SOCKET LISTENERS ================= */
+  
+
+  useEffect(() => {
+    if (!socket) return;
+const handleAnswer = async ({ answer }) => {
+  if (!peerConnection.current) return;
+
+  if (
+    peerConnection.current.signalingState !== "have-local-offer"
+  ) {
+    console.log(
+      "⚠️ Ignoring answer in state:",
+      peerConnection.current.signalingState
+    );
+    return;
+  }
+
+  try {
     await peerConnection.current.setRemoteDescription(
-      new RTCSessionDescription(incomingData.offer)
+      new RTCSessionDescription(answer)
     );
 
     for (const c of pendingCandidates.current) {
@@ -168,61 +180,29 @@ export default function VideoCall({
     }
     pendingCandidates.current = [];
 
-    const answer = await peerConnection.current.createAnswer();
-    await peerConnection.current.setLocalDescription(answer);
-
-    socket.emit("answer-call", {
-      to: incomingData.from,
-       answer: answer  
-    });
-
     setCallStatus("connected");
-  };
-
-  /* ================= SOCKET LISTENERS ================= */
-
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleAnswer = async ({ answer }) => {
-      if (!peerConnection.current) return;
-      if (peerConnection.current.signalingState !== "have-local-offer") return;
-
-      await peerConnection.current.setRemoteDescription(
-        new RTCSessionDescription(answer)
-      );
-
-      for (const c of pendingCandidates.current) {
-        await peerConnection.current.addIceCandidate(
-          new RTCIceCandidate(c)
-        );
-      }
-      pendingCandidates.current = [];
-
-      setCallStatus("connected");
-    };
+  } catch (err) {
+    console.error("Error setting remote answer:", err);
+  }
+};
 
     const handleIce = async ({ candidate }) => {
-      if (!peerConnection.current) return;
+  if (!peerConnection.current || !candidate) return;
 
-      if (!peerConnection.current.remoteDescription) {
-        pendingCandidates.current.push(candidate);
-        return;
-      }
+  if (!peerConnection.current.remoteDescription) {
+    pendingCandidates.current.push(candidate);
+    return;
+  }
 
-      await peerConnection.current.addIceCandidate(
-        new RTCIceCandidate(candidate)
-      );
-    };
+  await peerConnection.current.addIceCandidate(
+    new RTCIceCandidate(candidate)
+  );
+};
 
     const handleEnd = () => {
       cleanupCall();
       onClose();
     };
-
-    socket.off("call-answered");
-    socket.off("ice-candidate");
-    socket.off("call-ended");
 
     socket.on("call-answered", handleAnswer);
     socket.on("ice-candidate", handleIce);
@@ -233,22 +213,22 @@ export default function VideoCall({
       socket.off("ice-candidate", handleIce);
       socket.off("call-ended", handleEnd);
     };
+
   }, [socket]);
 
-  /* ================= INCOMING OFFER ================= */
+  /* ================= INCOMING CALL ================= */
 
   useEffect(() => {
-    if (!incomingOffer) return;
+    if (incomingOffer) {
+      setIncomingData({
+        offer: incomingOffer,
+        from: targetUserId.toString()
+      });
 
-    otherUserRef.current = incomingOffer.from;
-
-    setIncomingData({
-      offer: incomingOffer.offer,
-      from: incomingOffer.from,
-    });
-
-    setCallType(incomingOffer.callType || "video");
-    setCallStatus("incoming");
+      otherUserRef.current = targetUserId;
+      setCallType(initialCallType || "video");
+      setCallStatus("incoming");
+    }
   }, [incomingOffer]);
 
   /* ================= TIMER ================= */
@@ -257,38 +237,70 @@ export default function VideoCall({
     let interval;
     if (callStatus === "connected") {
       interval = setInterval(() => {
-        setCallDuration((p) => p + 1);
+        setCallDuration(prev => prev + 1);
       }, 1000);
     }
     return () => clearInterval(interval);
   }, [callStatus]);
 
-  /* ================= END / REJECT ================= */
+  /* ================= CLEANUP ================= */
+
+  const cleanupCall = () => {
+    if (peerConnection.current) {
+      peerConnection.current.close();
+      peerConnection.current = null;
+    }
+
+    if (localVideoRef.current?.srcObject) {
+      localVideoRef.current.srcObject.getTracks().forEach(track => track.stop());
+      localVideoRef.current.srcObject = null;
+    }
+
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = null;
+    }
+pendingCandidates.current = [];
+  otherUserRef.current = null;
+  setIncomingData(null);
+    setCallDuration(0);
+    setCallStatus("idle");
+  };
 
   const endCall = () => {
-    if (otherUserRef.current) {
-      socket.emit("end-call", { to: otherUserRef.current });
-    }
+    socket.emit("end-call", { to: targetUserId.toString() });
     cleanupCall();
     onClose();
   };
 
-  const rejectCall = endCall;
+  const rejectCall = () => {
+    socket.emit("end-call", { to: otherUserRef.current.toString() });
+    cleanupCall();
+    onClose();
+  };
+
+  /* ================= CONTROLS ================= */
 
   const toggleMute = () => {
-    localStream?.getAudioTracks().forEach((t) => (t.enabled = !t.enabled));
-    setIsMuted((p) => !p);
+    localStream?.getAudioTracks().forEach(track => {
+      track.enabled = !track.enabled;
+    });
+    setIsMuted(prev => !prev);
   };
 
   const toggleCamera = () => {
-    localStream?.getVideoTracks().forEach((t) => (t.enabled = !t.enabled));
-    setIsCameraOff((p) => !p);
+    localStream?.getVideoTracks().forEach(track => {
+      track.enabled = !track.enabled;
+    });
+    setIsCameraOff(prev => !prev);
   };
 
-  const formatTime = (sec) =>
-    `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(
-      sec % 60
-    ).padStart(2, "0")}`;
+  /* ================= UI ================= */
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2,"0")}:${secs.toString().padStart(2,"0")}`;
+  };
 
   return (
     <CallUI
