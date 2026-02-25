@@ -59,10 +59,13 @@ export default function VideoCall({
       }
     };
 
-    peerConnection.current.ontrack = (event) => {
-      event.streams[0].getTracks().forEach(track => {
-        remoteStreamRef.current.addTrack(track);
-      });
+   peerConnection.current.ontrack = (event) => {
+  console.log("Remote track received:", event.streams);
+
+  if (!remoteVideoRef.current) return;
+
+  remoteVideoRef.current.srcObject = event.streams[0];
+};
 
       if (remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = remoteStreamRef.current;
