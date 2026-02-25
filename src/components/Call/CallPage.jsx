@@ -28,14 +28,26 @@ export default function VideoCall({
 
   const iceConfig = {
     iceServers: [
-      { urls: "stun:stun.relay.metered.ca:80" },
+     {
+        urls: "stun:stun.relay.metered.ca:80",
+      },
       {
         urls: "turn:global.relay.metered.ca:80",
         username: "a276c28a894e22e6e9b400c1",
         credential: "QlDSTWza3xkHHWZe",
       },
       {
+        urls: "turn:global.relay.metered.ca:80?transport=tcp",
+        username: "a276c28a894e22e6e9b400c1",
+        credential: "QlDSTWza3xkHHWZe",
+      },
+      {
         urls: "turn:global.relay.metered.ca:443",
+        username: "a276c28a894e22e6e9b400c1",
+        credential: "QlDSTWza3xkHHWZe",
+      },
+      {
+        urls: "turns:global.relay.metered.ca:443?transport=tcp",
         username: "a276c28a894e22e6e9b400c1",
         credential: "QlDSTWza3xkHHWZe",
       },
