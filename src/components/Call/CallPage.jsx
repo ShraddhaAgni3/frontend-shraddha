@@ -173,7 +173,7 @@ export default function VideoCall({
 
     socket.emit("answer-call", {
       to: incomingData.from,
-      answer,
+       answer: answer  
     });
 
     setCallStatus("connected");
