@@ -157,33 +157,31 @@ const [callTargetId, setCallTargetId] = useState(null);
   }, [location.state, currentUserId]);
 
   // Fetch recent chats
-  const fetchRecentChats = async () => {
-    try {
-      setRecentChatsLoading(true);
-      const response = await chatApi.getRecentChats(currentUserId);
-      setRecentChats(response.data);
+ // ✅ ADD HERE (same position where old function was)
+const fetchRecentChats = useCallback(async () => {
+  if (!currentUserId) return;
 
-      // AUTO-SELECT FIRST RECENT CHAT IF NO USER IS SELECTED
-      if (response.data && response.data.length > 0 && !selectedUser) {
-        const firstChat = response.data[0];
-        const user = {
-          id: firstChat.user_id,
-          name: firstChat.name,
-          email: firstChat.email,
-          profile_picture_url: firstChat.profile_picture_url
-          
-        };
-        // Small delay to ensure state is set
-        setTimeout(() => {
-          handleUserSelect(user);
-        }, 100);
-      }
-    } catch (error) {
-      console.error("Error fetching recent chats:", error);
-    } finally {
-      setRecentChatsLoading(false);
+  try {
+    setRecentChatsLoading(true);
+    const response = await chatApi.getRecentChats(currentUserId);
+    setRecentChats(response.data);
+
+    // 👇 keep auto-select logic
+    if (response.data && response.data.length > 0 && !selectedUser) {
+      const firstChat = response.data[0];
+      handleUserSelect({
+        id: firstChat.user_id,
+        name: firstChat.name,
+        email: firstChat.email,
+        profile_picture_url: firstChat.profile_picture_url,
+      });
     }
-  };
+  } catch (error) {
+    console.error("Error fetching recent chats:", error);
+  } finally {
+    setRecentChatsLoading(false);
+  }
+}, [currentUserId, selectedUser]);
 
   // Handle recent chat selection
   const handleRecentChatSelect = (chat) => {
@@ -208,11 +206,11 @@ const [callTargetId, setCallTargetId] = useState(null);
   };
 
   // RECENT CHATS USE EFFECT
-  useEffect(() => {
-    if (currentUserId) {
-      fetchRecentChats();
-    }
-  }, [currentUserId]);
+ useEffect(() => {
+  if (currentUserId) {
+    fetchRecentChats();
+  }
+}, [currentUserId, fetchRecentChats]);
 
   // Click outside to close reaction picker and delete option
   useEffect(() => {
@@ -352,13 +350,18 @@ useEffect(() => {
     }
   };
 
-  const handleIncomingCall = ({ offer, from, callType }) => {
-  if (!socket?.connected) {
-    console.warn("Incoming call but socket not ready");
+const handleIncomingCall = ({ offer, from, callType }) => {
+  if (!socket || !socket.connected) {
+    console.warn("⚠️ Incoming call but socket not connected");
     return;
   }
 
-  console.log("📞 Incoming call from:", from);
+  // already on call
+  if (showCall) {
+    socket.emit("end-call", { to: from });
+    return;
+  }
+
   setCallTargetId(from);
   setCallData({ offer, callType });
   setShowCall(true);
@@ -1144,7 +1147,7 @@ useEffect(() => {
               <div className="hidden md:flex p-4 border-b border-gray-200 bg-white items-center gap-3">
                 {/*  PROFILE PICTURE WITH FALLBACK */}
                 {/* shraddha new code */}
-            <button
+           <button
   onClick={() => {
     if (!socket?.connected) {
       console.warn("Socket not ready yet");
