@@ -1,6 +1,6 @@
 // client/src/components/Call/CallPage.jsx
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import useMedia from "../webrtc/useMedia"
+import useMedia from "../webrtc/useMedia";
 
 const ICE_SERVERS = {
   iceServers: [
@@ -14,29 +14,23 @@ export default function CallPage({
   currentUserId,
   targetUserId,
   incomingOffer = null,
-  incomingRoomId = null,
   callType = "video",
   onClose,
 }) {
-  // ── BUG FIX 1: useMedia now returns { stream, error } ───────────────────
   const { stream: localStream, error: mediaError } = useMedia(
     callType === "video",
     true
   );
 
-  const localVideoRef  = useRef(null);
-  const remoteVideoRef = useRef(null);
-  const peerRef        = useRef(null);
-
-  // ── BUG FIX 2: ICE candidate queue ──────────────────────────────────────
-  // Candidates arriving before setRemoteDescription completes are silently
-  // dropped by the browser. We queue them and flush after remoteDesc is set.
-  const iceCandidateQueue = useRef([]);
+  const localVideoRef     = useRef(null);
+  const remoteVideoRef    = useRef(null);
+  const peerRef           = useRef(null);
+  const iceCandidateQueue = useRef([]);   // queue candidates until remoteDesc is set
   const remoteDescSet     = useRef(false);
 
+  // Deterministic roomId — same formula on both sides guarantees a match
   const roomIdRef = useRef(
-    incomingRoomId ||
-      `call_${[String(currentUserId), String(targetUserId)].sort().join("_")}`
+    `call_${[String(currentUserId), String(targetUserId)].sort().join("_")}`
   );
 
   const [remoteStream, setRemoteStream] = useState(null);
@@ -46,50 +40,52 @@ export default function CallPage({
   const [micMuted, setMicMuted] = useState(false);
   const [camOff, setCamOff]     = useState(false);
 
-  // ── Attach local stream to video element ────────────────────────────────
+  // ── Attach local stream ──────────────────────────────────────────────────
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
     }
   }, [localStream]);
 
-  // ── BUG FIX 3: callback ref for remote video ────────────────────────────
-  // Using a callback ref ensures we never miss the stream arriving before
-  // the DOM element mounts (plain useRef can silently fail here)
+  // ── Attach remote stream (callback ref = no timing issues) ──────────────
   const remoteVideoCallbackRef = useCallback(
     (node) => {
       remoteVideoRef.current = node;
-      if (node && remoteStream) {
-        node.srcObject = remoteStream;
-      }
+      if (node && remoteStream) node.srcObject = remoteStream;
     },
     [remoteStream]
   );
-
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
       remoteVideoRef.current.srcObject = remoteStream;
     }
   }, [remoteStream]);
 
-  // ── Flush queued ICE candidates after remote desc is ready ───────────────
+  // ── Flush queued ICE candidates ──────────────────────────────────────────
   const flushIceCandidates = useCallback(async () => {
-    const queue = iceCandidateQueue.current;
-    console.log(`🧊 Flushing ${queue.length} queued ICE candidates`);
-    while (queue.length > 0) {
-      const candidate = queue.shift();
+    console.log(`🧊 Flushing ${iceCandidateQueue.current.length} queued ICE candidates`);
+    while (iceCandidateQueue.current.length > 0) {
+      const c = iceCandidateQueue.current.shift();
       try {
-        await peerRef.current?.addIceCandidate(new RTCIceCandidate(candidate));
-      } catch (err) {
-        console.error("❌ Queued ICE candidate failed:", err);
+        await peerRef.current?.addIceCandidate(new RTCIceCandidate(c));
+      } catch (e) {
+        console.error("❌ Flushed ICE failed:", e);
       }
     }
   }, []);
 
-  // ── Create RTCPeerConnection ─────────────────────────────────────────────
+  // ── End call ─────────────────────────────────────────────────────────────
+  const handleEndCall = useCallback(() => {
+    socket?.emit("call-ended", { to: String(targetUserId) });
+    if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
+    localStream?.getTracks().forEach((t) => t.stop());
+    setCallStatus("ended");
+    onClose?.();
+  }, [socket, targetUserId, localStream, onClose]);
+
+  // ── Create RTCPeerConnection ──────────────────────────────────────────────
   const createPeer = useCallback(
     (stream) => {
-      // Destroy existing peer cleanly
       if (peerRef.current) {
         peerRef.current.ontrack = null;
         peerRef.current.onicecandidate = null;
@@ -101,46 +97,43 @@ export default function CallPage({
 
       const pc = new RTCPeerConnection(ICE_SERVERS);
 
-      // ✅ Tracks MUST be added before createOffer/createAnswer
       if (stream) {
         stream.getTracks().forEach((track) => {
-          console.log("➕ Adding track:", track.kind, "| enabled:", track.enabled);
+          console.log("➕ Track added:", track.kind, "enabled:", track.enabled);
           pc.addTrack(track, stream);
         });
       } else {
-        console.error("🚨 createPeer called with null stream — no tracks added!");
+        console.error("🚨 createPeer: stream is null!");
       }
 
+      // FIX ROOT CAUSE 3 & 4:
+      // ICE candidates must carry targetUserId so the server can route
+      // them directly via onlineUsers map — NOT via socket.to(roomId)
       pc.onicecandidate = (e) => {
         if (e.candidate) {
           socket.emit("ice-candidate", {
-            roomId: roomIdRef.current,
+            targetUserId: String(targetUserId), // ← CRITICAL: userId-based routing
             candidate: e.candidate,
           });
         }
       };
 
       pc.oniceconnectionstatechange = () => {
-        console.log("🧊 ICE:", pc.iceConnectionState);
+        console.log("🧊 ICE state:", pc.iceConnectionState);
         if (["failed", "disconnected", "closed"].includes(pc.iceConnectionState)) {
           handleEndCall();
         }
       };
 
       pc.onconnectionstatechange = () => {
-        console.log("🔗 Peer connection:", pc.connectionState);
+        console.log("🔗 Connection state:", pc.connectionState);
       };
 
-      // ── BUG FIX 4: fallback stream construction if e.streams is empty ───
       pc.ontrack = (e) => {
-        console.log("📡 Remote track:", e.track.kind, "| streams:", e.streams?.length);
-        let ms;
-        if (e.streams && e.streams[0]) {
-          ms = e.streams[0];
-        } else {
-          // Some browsers don't populate e.streams — build manually
-          ms = new MediaStream([e.track]);
-        }
+        console.log("📡 Remote track:", e.track.kind, "streams:", e.streams?.length);
+        const ms = (e.streams && e.streams[0])
+          ? e.streams[0]
+          : new MediaStream([e.track]); // fallback for Firefox
         setRemoteStream(ms);
         setCallStatus("connected");
       };
@@ -148,32 +141,19 @@ export default function CallPage({
       peerRef.current = pc;
       return pc;
     },
-    [socket] // eslint-disable-line react-hooks/exhaustive-deps
+    [socket, targetUserId, handleEndCall]
   );
 
-  // ── End call ─────────────────────────────────────────────────────────────
-  const handleEndCall = useCallback(() => {
-    socket?.emit("call-ended", { to: String(targetUserId) });
-    if (peerRef.current) {
-      peerRef.current.close();
-      peerRef.current = null;
-    }
-    localStream?.getTracks().forEach((t) => t.stop());
-    setCallStatus("ended");
-    onClose?.();
-  }, [socket, targetUserId, localStream, onClose]);
-
-  // ── Signalling effect — waits for localStream ────────────────────────────
+  // ── Main signalling effect — only runs once localStream is ready ─────────
   useEffect(() => {
     if (!socket || !localStream) {
-      console.log("⏳ Waiting for stream...", { hasSocket: !!socket, hasStream: !!localStream });
+      console.log("⏳ Waiting for socket + stream…", { socket: !!socket, localStream: !!localStream });
       return;
     }
 
-    console.log("✅ Stream ready — initialising WebRTC");
-    const roomId = roomIdRef.current;
+    console.log("✅ Stream ready, starting WebRTC signalling");
 
-    // ── OUTGOING: create and send offer ───────────────────────────────────
+    // ── OUTGOING CALL ──────────────────────────────────────────────────────
     if (!incomingOffer) {
       (async () => {
         try {
@@ -183,7 +163,6 @@ export default function CallPage({
             offerToReceiveVideo: callType === "video",
           });
           await pc.setLocalDescription(offer);
-          console.log("📤 Offer sent to user", targetUserId);
           socket.emit("call-user", {
             targetUserId: String(targetUserId),
             offer,
@@ -191,13 +170,14 @@ export default function CallPage({
             from: String(currentUserId),
           });
           setCallStatus("ringing");
+          console.log("📤 Offer sent to", targetUserId);
         } catch (err) {
-          console.error("❌ createOffer:", err);
+          console.error("❌ createOffer failed:", err);
         }
       })();
     }
 
-    // ── INCOMING: set remote desc and send answer ─────────────────────────
+    // ── INCOMING CALL ──────────────────────────────────────────────────────
     if (incomingOffer) {
       (async () => {
         try {
@@ -208,30 +188,23 @@ export default function CallPage({
 
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          console.log("📤 Answer sent to user", targetUserId);
           socket.emit("call-accepted", {
-            roomId,
             answer,
             to: String(targetUserId),
           });
+          console.log("📤 Answer sent to", targetUserId);
         } catch (err) {
-          console.error("❌ answering call:", err);
+          console.error("❌ Answering failed:", err);
         }
       })();
     }
 
-    // ── Socket handlers ───────────────────────────────────────────────────
+    // ── Socket event handlers ──────────────────────────────────────────────
     const handleCallAccepted = async ({ answer }) => {
       console.log("📥 Answer received");
       try {
-        if (!peerRef.current) return;
-        if (peerRef.current.signalingState === "stable") {
-          console.warn("Already stable — skipping setRemoteDescription");
-          return;
-        }
-        await peerRef.current.setRemoteDescription(
-          new RTCSessionDescription(answer)
-        );
+        if (!peerRef.current || peerRef.current.signalingState === "stable") return;
+        await peerRef.current.setRemoteDescription(new RTCSessionDescription(answer));
         remoteDescSet.current = true;
         await flushIceCandidates();
         setCallStatus("connected");
@@ -243,7 +216,7 @@ export default function CallPage({
     const handleIceCandidate = async ({ candidate }) => {
       if (!candidate) return;
       if (!remoteDescSet.current) {
-        console.log("📦 Queueing ICE candidate (remote desc not ready)");
+        console.log("📦 Queueing ICE candidate");
         iceCandidateQueue.current.push(candidate);
         return;
       }
@@ -260,40 +233,36 @@ export default function CallPage({
     };
 
     const handleCallEnded = () => {
-      if (peerRef.current) {
-        peerRef.current.close();
-        peerRef.current = null;
-      }
+      if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
       setCallStatus("ended");
       onClose?.();
     };
 
-    socket.on("call-accepted", handleCallAccepted);
-    socket.on("ice-candidate", handleIceCandidate);
-    socket.on("call-rejected", handleCallRejected);
-    socket.on("call-ended",    handleCallEnded);
-    socket.on("call-failed",   ({ reason }) => {
+    const handleCallFailed = ({ reason }) => {
       console.warn("Call failed:", reason);
       setCallStatus("failed");
       setTimeout(() => onClose?.(), 2000);
-    });
+    };
+
+    socket.on("call-accepted",  handleCallAccepted);
+    socket.on("ice-candidate",  handleIceCandidate);
+    socket.on("call-rejected",  handleCallRejected);
+    socket.on("call-ended",     handleCallEnded);
+    socket.on("call-failed",    handleCallFailed);
 
     return () => {
-      socket.off("call-accepted", handleCallAccepted);
-      socket.off("ice-candidate", handleIceCandidate);
-      socket.off("call-rejected", handleCallRejected);
-      socket.off("call-ended",    handleCallEnded);
-      socket.off("call-failed");
+      socket.off("call-accepted",  handleCallAccepted);
+      socket.off("ice-candidate",  handleIceCandidate);
+      socket.off("call-rejected",  handleCallRejected);
+      socket.off("call-ended",     handleCallEnded);
+      socket.off("call-failed",    handleCallFailed);
     };
-  }, [socket, localStream]); // ✅ only re-runs when stream becomes available
+  }, [socket, localStream]); // re-runs when stream becomes available
 
-  // ── Cleanup peer on unmount ───────────────────────────────────────────────
+  // ── Unmount cleanup ───────────────────────────────────────────────────────
   useEffect(() => {
     return () => {
-      if (peerRef.current) {
-        peerRef.current.close();
-        peerRef.current = null;
-      }
+      if (peerRef.current) { peerRef.current.close(); peerRef.current = null; }
     };
   }, []);
 
@@ -301,7 +270,6 @@ export default function CallPage({
     localStream?.getAudioTracks().forEach((t) => (t.enabled = !t.enabled));
     setMicMuted((p) => !p);
   };
-
   const toggleCam = () => {
     localStream?.getVideoTracks().forEach((t) => (t.enabled = !t.enabled));
     setCamOff((p) => !p);
@@ -317,7 +285,7 @@ export default function CallPage({
     ended:      "Call Ended",
   }[callStatus] ?? callStatus;
 
-  // ── Media permission error ────────────────────────────────────────────────
+  // ── Media error ───────────────────────────────────────────────────────────
   if (mediaError) {
     return (
       <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
@@ -325,27 +293,20 @@ export default function CallPage({
           <p className="text-5xl mb-4">🎥</p>
           <p className="text-red-600 font-semibold text-lg mb-2">Camera / Mic Error</p>
           <p className="text-gray-500 text-sm mb-6">{mediaError}</p>
-          <button
-            onClick={onClose}
-            className="px-6 py-2 bg-gray-800 text-white rounded-full text-sm font-medium"
-          >
-            Close
-          </button>
+          <button onClick={onClose} className="px-6 py-2 bg-gray-800 text-white rounded-full text-sm">Close</button>
         </div>
       </div>
     );
   }
 
-  // ── Waiting for camera permission ─────────────────────────────────────────
+  // ── Waiting for camera ────────────────────────────────────────────────────
   if (!localStream) {
     return (
       <div className="fixed inset-0 bg-gray-900 flex items-center justify-center z-50">
         <div className="text-center text-white">
           <div className="text-6xl mb-4 animate-pulse">📷</div>
           <p className="text-xl font-medium">Requesting camera access…</p>
-          <p className="text-sm text-white/50 mt-2">
-            Please allow camera and microphone in your browser
-          </p>
+          <p className="text-sm text-white/50 mt-2">Please allow camera and microphone</p>
         </div>
       </div>
     );
@@ -354,16 +315,14 @@ export default function CallPage({
   // ── Call UI ───────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 bg-gray-900 flex flex-col">
-      {/* Status pill */}
       <div className="absolute top-0 left-0 right-0 z-10 flex justify-center pt-5">
         <span className="bg-black/50 backdrop-blur text-white text-sm px-5 py-1.5 rounded-full">
           {statusLabel}
         </span>
       </div>
 
-      {/* Video area */}
       <div className="relative flex-1 overflow-hidden">
-        {/* Remote — full screen */}
+        {/* Remote video — full screen */}
         <video
           ref={remoteVideoCallbackRef}
           autoPlay
@@ -371,7 +330,6 @@ export default function CallPage({
           className="w-full h-full object-cover bg-gray-800"
         />
 
-        {/* No remote stream placeholder */}
         {!remoteStream && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
             <div className="text-center text-white/50">
@@ -381,7 +339,7 @@ export default function CallPage({
           </div>
         )}
 
-        {/* Local — picture-in-picture */}
+        {/* Local video — PiP */}
         <video
           ref={localVideoRef}
           autoPlay

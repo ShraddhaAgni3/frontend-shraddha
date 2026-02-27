@@ -307,7 +307,7 @@ const [showCall, setShowCall] = useState(false);//end
 
   const handleConnect = () => {
     console.log("Socket connected");
-    socket.emit("register_user", currentUserId.toString());
+    // socket.emit("register_user", currentUserId.toString());
   };
 
   const handleDisconnect = () => {
@@ -859,7 +859,7 @@ const [showCall, setShowCall] = useState(false);//end
        {/* shraddha new code */}
 {showCall && callData && (
   <CallPage
-    socket={socketRef.current}
+    socket={socket}
     currentUserId={currentUserId}
     targetUserId={callData.targetId}
     incomingOffer={callData.isIncoming ? callData.offer : null}
