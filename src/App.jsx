@@ -129,7 +129,7 @@ useEffect(() => {
       <Routes>
         {/* Admin Routes - NEW STRUCTURE */}
         <Route path="/admin-login" element={<AdminLogin />} />
-
+        <Route path="/call/:roomId" element={<CallPage />} />
         {/* Main Admin Route with nested routes */}
         <Route
           path="/admin/*"
