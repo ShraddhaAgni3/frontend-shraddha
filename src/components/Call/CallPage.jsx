@@ -1,6 +1,6 @@
 // client/src/components/Call/CallPage.jsx
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import useMedia from "../../webrtc/useMedia";
+import useMedia from "../webrtc/useMedia"
 
 const ICE_SERVERS = {
   iceServers: [
