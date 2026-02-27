@@ -107,14 +107,10 @@ useEffect(() => {
 
   socket.emit("register_user", currentUserId.toString());
 
-  const handleIncomingCall = ({ offer, from, callType }) => {
+  const handleIncomingCall = ({ offer, from, callType, roomId }) => {
     console.log("📞 Global Incoming Call Received");
 
-    setIncomingCall({
-      offer,
-      from,
-      callType,
-    });
+    setIncomingCall({ offer, from, callType, roomId });
   };
 
   socket.on("incoming-call", handleIncomingCall);
@@ -512,12 +508,13 @@ useEffect(() => {
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
       {/*shraddha new code start*/}
-      {incomingCall && (
+    {incomingCall && (
   <CallPage
     socket={socket}
     currentUserId={currentUserId}
-    targetUserId={incomingCall.from}
+    targetUserId={incomingCall.from}        // ✅ who called you
     incomingOffer={incomingCall.offer}
+    incomingRoomId={incomingCall.roomId}    // ✅ pass roomId from server
     callType={incomingCall.callType}
     onClose={() => setIncomingCall(null)}
   />
