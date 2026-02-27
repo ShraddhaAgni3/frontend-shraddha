@@ -1,272 +1,220 @@
 // client/src/components/Call/CallPage.jsx
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import useMedia from "../webrtc/useMedia";
+import useWebRTC from "../webrtc/useWebRTC";
 
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-  ],
-};
-
+/**
+ * CallPage — handles both outgoing and incoming WebRTC calls.
+ *
+ * Props
+ * -----
+ * socket         : socket.io instance (passed from parent, NOT imported directly)
+ * currentUserId  : logged-in user's ID (string)
+ * targetUserId   : the other user's ID (string)
+ * incomingOffer  : RTCSessionDescription | null  (null = outgoing call)
+ * callType       : "video" | "audio"
+ * onClose        : () => void  — called when call ends
+ */
 export default function CallPage({
   socket,
   currentUserId,
   targetUserId,
   incomingOffer = null,
-  incomingRoomId = null,
   callType = "video",
   onClose,
 }) {
-  const { stream: localStream, error: mediaError } = useMedia(
-    callType === "video",
-    true
-  );
+  // ── Media ────────────────────────────────────────────────────────────────
+  const videoEnabled = callType === "video";
+  const { stream: localStream, error: mediaError } = useMedia(videoEnabled, true);
 
-  const localVideoRef  = useRef(null);
+  // ── Refs ─────────────────────────────────────────────────────────────────
+  const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
-  const peerRef        = useRef(null);
-  const roomIdRef      = useRef(
-    incomingRoomId ||
-    `call_${[String(currentUserId), String(targetUserId)].sort().join("_")}`
-  );
+  const roomIdRef = useRef(`call_${[currentUserId, targetUserId].sort().join("_")}`);
 
+  // ── State ─────────────────────────────────────────────────────────────────
   const [remoteStream, setRemoteStream] = useState(null);
-  const [callStatus, setCallStatus]     = useState(
-    incomingOffer ? "connecting" : "calling"
+  const [callStatus, setCallStatus] = useState(
+    incomingOffer ? "incoming" : "calling"
   );
   const [micMuted, setMicMuted] = useState(false);
-  const [camOff, setCamOff]     = useState(false);
+  const [camOff, setCamOff] = useState(false);
 
-  // ── Attach local stream to video ──────────────────────────────────────
+  // ── WebRTC ────────────────────────────────────────────────────────────────
+  const { peer, createPeer, destroyPeer } = useWebRTC(
+    socket,
+    localStream,
+    roomIdRef.current,
+    (stream) => {
+      setRemoteStream(stream);
+      setCallStatus("connected");
+    }
+  );
+
+  // ── Attach local stream to video element ─────────────────────────────────
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
     }
   }, [localStream]);
 
-  // ── Attach remote stream to video ─────────────────────────────────────
+  // ── Attach remote stream to video element ────────────────────────────────
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
       remoteVideoRef.current.srcObject = remoteStream;
     }
   }, [remoteStream]);
 
-  // ── Create peer ────────────────────────────────────────────────────────
-  // IMPORTANT: localStream is passed explicitly — never rely on closure timing
-  const createPeer = useCallback(
-    (stream) => {
-      // Destroy any existing peer first
-      if (peerRef.current) {
-        peerRef.current.close();
-        peerRef.current = null;
-      }
-
-      const pc = new RTCPeerConnection(ICE_SERVERS);
-
-      // ✅ Add tracks BEFORE creating offer/answer
-      if (stream) {
-        stream.getTracks().forEach((track) => {
-          console.log("➕ Adding track:", track.kind);
-          pc.addTrack(track, stream);
-        });
-      } else {
-        console.warn("⚠️ createPeer called with no stream — video/audio will be missing");
-      }
-
-      pc.onicecandidate = (e) => {
-        if (e.candidate) {
-          socket.emit("ice-candidate", {
-            roomId: roomIdRef.current,
-            candidate: e.candidate,
-          });
-        }
-      };
-
-      pc.ontrack = (e) => {
-        console.log("📡 Remote track received:", e.track.kind);
-        if (e.streams?.[0]) {
-          setRemoteStream(e.streams[0]);
-          setCallStatus("connected");
-        }
-      };
-
-      pc.oniceconnectionstatechange = () => {
-        console.log("ICE:", pc.iceConnectionState);
-        if (["failed", "disconnected", "closed"].includes(pc.iceConnectionState)) {
-          handleEndCall();
-        }
-      };
-
-      peerRef.current = pc;
-      return pc;
-    },
-    [socket]
-  );
-
-  // ── End call ───────────────────────────────────────────────────────────
-  const handleEndCall = useCallback(() => {
-    socket?.emit("call-ended", { to: targetUserId });
-    if (peerRef.current) {
-      peerRef.current.close();
-      peerRef.current = null;
-    }
-    localStream?.getTracks().forEach((t) => t.stop());
-    setCallStatus("ended");
-    onClose?.();
-  }, [socket, targetUserId, localStream, onClose]);
-
-  // ── Signalling — only runs when localStream is ready ──────────────────
+  // ── Socket signalling ─────────────────────────────────────────────────────
   useEffect(() => {
-    // ✅ CRITICAL: Do NOT proceed until localStream is available
     if (!socket || !localStream) return;
 
     const roomId = roomIdRef.current;
 
-    // ── OUTGOING: create offer ─────────────────────────────────────────
-    if (!incomingOffer) {
-      (async () => {
-        try {
-          const pc = createPeer(localStream); // ✅ pass stream explicitly
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-
-          socket.emit("call-user", {
-            targetUserId,
-            offer,
-            callType,
-            from: currentUserId,
-          });
-          setCallStatus("ringing");
-        } catch (err) {
-          console.error("❌ createOffer:", err);
-        }
-      })();
-    }
-
-    // ── INCOMING: answer ───────────────────────────────────────────────
-    if (incomingOffer) {
-      (async () => {
-        try {
-          const pc = createPeer(localStream); // ✅ pass stream explicitly
-          await pc.setRemoteDescription(
-            new RTCSessionDescription(incomingOffer)
-          );
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-
-          socket.emit("call-accepted", {
-            roomId,
-            answer,
-            to: targetUserId,
-          });
-          setCallStatus("connected");
-        } catch (err) {
-          console.error("❌ answering call:", err);
-        }
-      })();
-    }
-
-    // ── Handlers ───────────────────────────────────────────────────────
-    const handleCallAccepted = async ({ answer }) => {
+    // ---- Handler: remote answered ----
+    const handleAnswer = async (answer) => {
       try {
-        if (peerRef.current?.signalingState !== "stable") {
-          await peerRef.current.setRemoteDescription(
+        if (peer.current?.signalingState !== "stable") {
+          await peer.current.setRemoteDescription(
             new RTCSessionDescription(answer)
           );
           setCallStatus("connected");
         }
       } catch (err) {
-        console.error("❌ setRemoteDescription:", err);
+        console.error("❌ setRemoteDescription (answer):", err);
       }
     };
 
+    // ---- Handler: remote sent offer (shouldn't happen here but guard) ----
+    const handleOffer = async (offer) => {
+      try {
+        const pc = createPeer();
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit("answer", { roomId, answer });
+      } catch (err) {
+        console.error("❌ handling offer:", err);
+      }
+    };
+
+    // ---- Handler: ICE candidate from remote ----
     const handleIceCandidate = async ({ candidate }) => {
       try {
-        if (peerRef.current && candidate) {
-          await peerRef.current.addIceCandidate(
-            new RTCIceCandidate(candidate)
-          );
+        if (peer.current && candidate) {
+          await peer.current.addIceCandidate(new RTCIceCandidate(candidate));
         }
       } catch (err) {
         console.error("❌ addIceCandidate:", err);
       }
     };
 
-    const handleCallRejected = () => {
-      setCallStatus("rejected");
-      setTimeout(() => onClose?.(), 1500);
-    };
-
-    const handleCallEnded = () => {
-      if (peerRef.current) {
-        peerRef.current.close();
-        peerRef.current = null;
-      }
+    // ---- Handler: remote user left ----
+    const handleUserLeft = () => {
+      console.log("🔴 Remote user left");
       setCallStatus("ended");
-      onClose?.();
+      handleEndCall();
     };
 
-    const handleCallFailed = ({ reason }) => {
-      console.warn("Call failed:", reason);
-      setCallStatus("failed");
-      setTimeout(() => onClose?.(), 2000);
-    };
-
-    socket.on("call-accepted",  handleCallAccepted);
-    socket.on("ice-candidate",  handleIceCandidate);
-    socket.on("call-rejected",  handleCallRejected);
-    socket.on("call-ended",     handleCallEnded);
-    socket.on("call-failed",    handleCallFailed);
-
-    return () => {
-      socket.off("call-accepted",  handleCallAccepted);
-      socket.off("ice-candidate",  handleIceCandidate);
-      socket.off("call-rejected",  handleCallRejected);
-      socket.off("call-ended",     handleCallEnded);
-      socket.off("call-failed",    handleCallFailed);
-    };
-  }, [socket, localStream]); // ✅ localStream in deps — re-runs when camera is ready
-
-  // ── Cleanup on unmount ─────────────────────────────────────────────────
-  useEffect(() => {
-    return () => {
-      if (peerRef.current) {
-        peerRef.current.close();
-        peerRef.current = null;
+    // ---- Handler: ready signal (both users joined room) ----
+    const handleReady = async () => {
+      if (incomingOffer) return; // answerer doesn't initiate offer
+      try {
+        const pc = createPeer();
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit("offer", { roomId, offer });
+        setCallStatus("ringing");
+      } catch (err) {
+        console.error("❌ createOffer:", err);
       }
     };
-  }, []);
 
-  const toggleMic = () => {
-    localStream?.getAudioTracks().forEach((t) => (t.enabled = !t.enabled));
-    setMicMuted((p) => !p);
-  };
+    socket.on("ready", handleReady);
+    socket.on("offer", handleOffer);
+    socket.on("answer", handleAnswer);
+    socket.on("ice-candidate", handleIceCandidate);
+    socket.on("user-left", handleUserLeft);
 
-  const toggleCam = () => {
-    localStream?.getVideoTracks().forEach((t) => (t.enabled = !t.enabled));
-    setCamOff((p) => !p);
-  };
+    // ---- Join room ----
+    socket.emit("join-room", roomId);
 
+    // ---- If incoming call: answer immediately ----
+    if (incomingOffer) {
+      (async () => {
+        try {
+          const pc = createPeer();
+          await pc.setRemoteDescription(
+            new RTCSessionDescription(incomingOffer)
+          );
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          socket.emit("answer", { roomId, answer });
+          setCallStatus("connected");
+        } catch (err) {
+          console.error("❌ Answering incoming call:", err);
+        }
+      })();
+    }
+
+    return () => {
+      socket.off("ready", handleReady);
+      socket.off("offer", handleOffer);
+      socket.off("answer", handleAnswer);
+      socket.off("ice-candidate", handleIceCandidate);
+      socket.off("user-left", handleUserLeft);
+    };
+  }, [socket, localStream, incomingOffer, createPeer, peer]);
+
+  // ── End call ──────────────────────────────────────────────────────────────
+  const handleEndCall = useCallback(() => {
+    destroyPeer();
+    if (localStream) {
+      localStream.getTracks().forEach((t) => t.stop());
+    }
+    setCallStatus("ended");
+    if (onClose) onClose();
+  }, [destroyPeer, localStream, onClose]);
+
+  // ── Toggle mic ────────────────────────────────────────────────────────────
+  const toggleMic = useCallback(() => {
+    if (!localStream) return;
+    localStream.getAudioTracks().forEach((t) => {
+      t.enabled = !t.enabled;
+    });
+    setMicMuted((prev) => !prev);
+  }, [localStream]);
+
+  // ── Toggle camera ─────────────────────────────────────────────────────────
+  const toggleCam = useCallback(() => {
+    if (!localStream) return;
+    localStream.getVideoTracks().forEach((t) => {
+      t.enabled = !t.enabled;
+    });
+    setCamOff((prev) => !prev);
+  }, [localStream]);
+
+  // ── Status label ──────────────────────────────────────────────────────────
   const statusLabel = {
-    calling:    "Calling…",
-    ringing:    "Ringing…",
-    connecting: "Connecting…",
-    connected:  "Connected",
-    rejected:   "Call rejected",
-    failed:     "User is offline",
-    ended:      "Call ended",
+    incoming: "Incoming call…",
+    calling: "Calling…",
+    ringing: "Ringing…",
+    connected: "Connected",
+    ended: "Call ended",
   }[callStatus] ?? callStatus;
 
+  // ── Render ────────────────────────────────────────────────────────────────
   if (mediaError) {
     return (
       <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-        <div className="bg-white rounded-2xl p-8 text-center max-w-sm w-full">
-          <p className="text-red-600 font-semibold mb-2">Camera / Mic Error</p>
+        <div className="bg-white rounded-2xl p-8 text-center max-w-sm w-full shadow-2xl">
+          <p className="text-red-600 font-semibold text-lg mb-2">
+            Camera / Mic Error
+          </p>
           <p className="text-gray-500 text-sm mb-6">{mediaError}</p>
           <button
             onClick={onClose}
-            className="px-6 py-2 bg-gray-800 text-white rounded-full text-sm"
+            className="px-6 py-2 bg-gray-800 text-white rounded-full text-sm font-medium hover:bg-gray-700"
           >
             Close
           </button>
@@ -276,55 +224,63 @@ export default function CallPage({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-gray-900 flex flex-col items-center justify-center">
+    <div className="fixed inset-0 z-50 bg-gray-900 flex flex-col items-center justify-center select-none">
+      {/* ── Status banner ─────────────────────────────────────── */}
       <p className="absolute top-6 text-white/70 text-sm tracking-wider uppercase">
         {statusLabel}
       </p>
 
+      {/* ── Video grid ────────────────────────────────────────── */}
       <div className="relative w-full h-full">
-        {/* Remote video */}
+        {/* Remote (large) */}
         <video
           ref={remoteVideoRef}
           autoPlay
           playsInline
-          className="w-full h-full object-cover bg-gray-800"
+          className="w-full h-full object-cover"
         />
 
-        {/* Local video PiP */}
+        {/* Local (picture-in-picture) */}
         <video
           ref={localVideoRef}
           autoPlay
           playsInline
           muted
-          className="absolute bottom-24 right-4 w-32 h-24 sm:w-48 sm:h-36 rounded-xl object-cover border-2 border-white/30 shadow-xl bg-gray-700"
+          className="absolute bottom-24 right-4 w-32 h-24 sm:w-48 sm:h-36 rounded-xl object-cover border-2 border-white/30 shadow-xl"
         />
       </div>
 
-      {/* Controls */}
+      {/* ── Controls bar ──────────────────────────────────────── */}
       <div className="absolute bottom-6 flex items-center gap-4">
+        {/* Mute mic */}
         <button
           onClick={toggleMic}
           className={`w-12 h-12 rounded-full flex items-center justify-center text-xl shadow-lg transition-colors ${
             micMuted ? "bg-red-500 text-white" : "bg-white/20 text-white hover:bg-white/30"
           }`}
+          title={micMuted ? "Unmute" : "Mute"}
         >
           {micMuted ? "🔇" : "🎤"}
         </button>
 
+        {/* Toggle camera (only in video call) */}
         {callType === "video" && (
           <button
             onClick={toggleCam}
             className={`w-12 h-12 rounded-full flex items-center justify-center text-xl shadow-lg transition-colors ${
               camOff ? "bg-red-500 text-white" : "bg-white/20 text-white hover:bg-white/30"
             }`}
+            title={camOff ? "Turn on camera" : "Turn off camera"}
           >
             {camOff ? "🚫" : "📷"}
           </button>
         )}
 
+        {/* End call */}
         <button
           onClick={handleEndCall}
-          className="w-14 h-14 rounded-full bg-red-600 text-white flex items-center justify-center text-2xl shadow-xl hover:bg-red-500"
+          className="w-14 h-14 rounded-full bg-red-600 text-white flex items-center justify-center text-2xl shadow-xl hover:bg-red-500 transition-transform hover:scale-105"
+          title="End call"
         >
           📵
         </button>
