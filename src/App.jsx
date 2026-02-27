@@ -509,15 +509,54 @@ useEffect(() => {
       </Routes>
       {/*shraddha new code start*/}
     {incomingCall && (
-  <CallPage
-    socket={socket}
-    currentUserId={currentUserId}
-    targetUserId={incomingCall.from}        // ✅ who called you
-    incomingOffer={incomingCall.offer}
-    incomingRoomId={incomingCall.roomId}    // ✅ pass roomId from server
-    callType={incomingCall.callType}
-    onClose={() => setIncomingCall(null)}
-  />
+  <>
+    {/* ── Ringing UI — shown BEFORE user accepts ── */}
+    {!incomingCall.accepted && (
+      <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center">
+        <div className="bg-white rounded-2xl p-8 text-center shadow-2xl w-80">
+          <div className="text-5xl mb-4 animate-bounce">📞</div>
+          <p className="text-lg font-semibold text-gray-800 mb-1">Incoming Call</p>
+          <p className="text-sm text-gray-500 mb-6">
+            {incomingCall.callType === "video" ? "📹 Video" : "🎤 Audio"} call
+          </p>
+          <div className="flex justify-center gap-6">
+            {/* ACCEPT */}
+            <button
+              onClick={() =>
+                setIncomingCall((prev) => ({ ...prev, accepted: true }))
+              }
+              className="w-16 h-16 rounded-full bg-green-500 text-white text-3xl flex items-center justify-center shadow-lg hover:bg-green-400"
+            >
+              ✅
+            </button>
+            {/* REJECT */}
+            <button
+              onClick={() => {
+                socket.emit("call-rejected", { to: incomingCall.from });
+                setIncomingCall(null);
+              }}
+              className="w-16 h-16 rounded-full bg-red-500 text-white text-3xl flex items-center justify-center shadow-lg hover:bg-red-400"
+            >
+              ❌
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── CallPage — only mounted AFTER accept is clicked ── */}
+    {incomingCall.accepted && (
+      <CallPage
+        socket={socket}
+        currentUserId={currentUserId}
+        targetUserId={incomingCall.from}
+        incomingOffer={incomingCall.offer}
+        incomingRoomId={incomingCall.roomId}
+        callType={incomingCall.callType}
+        onClose={() => setIncomingCall(null)}
+      />
+    )}
+  </>
 )} {/*shraddha new code end*/}
       <ToastContainer />
     </UserProfileProvider>
