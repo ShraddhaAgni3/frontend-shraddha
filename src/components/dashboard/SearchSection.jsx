@@ -766,13 +766,7 @@ export default function AdvancedSearch() {
             {/* Profile Image */}
             <div className="flex-shrink-0">
             <img
-  src={
-    profile.image_url && profile.image_url !== ""
-      ? profile.image_url.startsWith("http")
-        ? profile.image_url
-        : `${import.meta.env.VITE_API_BASE_URL}${profile.image_url}`
-      : `https://ui-avatars.com/api/?name=${profile.first_name}+${profile.last_name}`
-  }
+  src={profile.image_url}
   onError={(e) => {
     e.target.src = `https://ui-avatars.com/api/?name=${profile.first_name}+${profile.last_name}`;
   }}
